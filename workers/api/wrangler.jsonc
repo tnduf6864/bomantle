@@ -1,0 +1,24 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "bomantle-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-01",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	// 일일 정답 오버라이드용 KV. 미설정 시 날짜 시드 결정론으로 동작.
+	// 배포 전 `wrangler kv namespace create ANSWERS` 후 id 입력.
+	"kv_namespaces": [
+		{
+			"binding": "ANSWERS",
+			"id": "2a3cd2b09d28426294afd33c6b2d8ebb",
+			"remote": true
+		}
+	],
+	"vars": {
+		"TIMEZONE": "Asia/Seoul"
+	}
+}

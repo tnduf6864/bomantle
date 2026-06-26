@@ -1,0 +1,17 @@
+{
+  "name": "bomantle",
+  "version": "0.0.0",
+  "private": true,
+  "description": "보맨틀 — 보드게임을 맞추는 꼬맨틀(Semantle) 스타일 웹게임",
+  "packageManager": "pnpm@11.9.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "data": "pnpm --filter @bomantle/data... run build",
+    "dev:web": "pnpm --filter @bomantle/web dev",
+    "dev:api": "pnpm --filter @bomantle/api dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

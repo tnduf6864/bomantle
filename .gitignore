@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build outputs
+dist/
+.next/
+out/
+.open-next/
+.wrangler/
+
+# python
+data/.venv/
+data/__pycache__/
+*.pyc
+
+# large intermediate crawl files (keep final artifacts in data/out)
+data/games_detail.json
+data/games_list.json
+data/*.html
+data/*.log
+
+# env / secrets
+.env
+.env.*
+.dev.vars
+*.local
+
+# misc
+.DS_Store
+*.tsbuildinfo

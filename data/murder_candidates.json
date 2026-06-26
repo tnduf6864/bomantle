@@ -1,0 +1,727 @@
+{
+ "cat24_total": 195,
+ "no_bgg_sample": [
+  {
+   "id": "17173",
+   "name": "미스터리 파티 시리즈 : 용사가 죽었다 / Mystery Party in the ",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 401,
+   "kw": true
+  },
+  {
+   "id": "17146",
+   "name": "탁상탐정단: 그랜드 호텔 듀엣 / The Grand Hotel Duet Case",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 773,
+   "kw": false
+  },
+  {
+   "id": "17168",
+   "name": "미스터리 파티 시리즈 : 끝나지 않는 한여름 / Mystery Party in t",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1135,
+   "kw": true
+  },
+  {
+   "id": "17664",
+   "name": "라이노 교수가 아는 다가올 오늘 중의 죽음 / Professor Rhino kno",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1238,
+   "kw": false
+  },
+  {
+   "id": "17147",
+   "name": "탁상탐정단: 진홍의 골동품 / Bloody Antique",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1239,
+   "kw": false
+  },
+  {
+   "id": "17166",
+   "name": "미스터리 파티 시리즈: 다크 율에 속죄를 / Mystery Party in the",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1372,
+   "kw": true
+  },
+  {
+   "id": "14523",
+   "name": "서스펙트 게임: 리로드 / Suspect Game: Reload",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1417,
+   "kw": false
+  },
+  {
+   "id": "17685",
+   "name": "탐정이 너무 많다 / Too Many Detectives",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 1433,
+   "kw": false
+  },
+  {
+   "id": "20573",
+   "name": "에이다 / Eida",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1467,
+   "kw": false
+  },
+  {
+   "id": "17290",
+   "name": "미스터리 파티 시리즈 : 게놈의 탑 / Mystery Party in the Bo",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1470,
+   "kw": true
+  },
+  {
+   "id": "20803",
+   "name": "탁상탐정단: 얼굴 없는 앨리스 / The Faceless Alice",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1488,
+   "kw": false
+  },
+  {
+   "id": "12960",
+   "name": "목 베는 마을 / Head Village Murder Mystery",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1636,
+   "kw": true
+  },
+  {
+   "id": "17175",
+   "name": "미스터리 파티 시리즈 : 죄와 벌의 도서관 / Mystery Party in th",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1701,
+   "kw": true
+  },
+  {
+   "id": "20804",
+   "name": "탁상탐정단: 황혼에 웃는 소녀 / Girl Laughing in the Dusk",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1762,
+   "kw": false
+  },
+  {
+   "id": "21564",
+   "name": "껍질 속 세상 / 껍질 속 세상",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 1797,
+   "kw": false
+  },
+  {
+   "id": "16200",
+   "name": "미싱링크 / Missing link",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 1829,
+   "kw": false
+  },
+  {
+   "id": "20061",
+   "name": "운명의 세 여신: 베르단디 / Norns: Verdandi",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1909,
+   "kw": false
+  },
+  {
+   "id": "20533",
+   "name": "숨겨진 이야기 H / Hidden Story H",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1974,
+   "kw": false
+  },
+  {
+   "id": "17171",
+   "name": "미스터리 파티 시리즈 : 기상천외, 암네시아 / Mystery Party in t",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2022,
+   "kw": true
+  },
+  {
+   "id": "19162",
+   "name": "한(恨) 시리즈: 무령(無靈) / Han Series: Muryong",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2100,
+   "kw": false
+  },
+  {
+   "id": "17169",
+   "name": "미스터리 파티 시리즈: 흰 까마귀, 붉게 물들다 / Mystery Party in",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2125,
+   "kw": true
+  },
+  {
+   "id": "12369",
+   "name": "Y의 장례식 / Y's Funeral",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 2306,
+   "kw": false
+  },
+  {
+   "id": "17211",
+   "name": "죽음을 잇는 저택, 신전 / The Deadly Mansion",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 2496,
+   "kw": false
+  },
+  {
+   "id": "21586",
+   "name": "탁상탐정단: 레드 스마일 / Red Smile",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 2516,
+   "kw": false
+  },
+  {
+   "id": "17122",
+   "name": "머더 미스터리 미니: 주말의 살인귀 / Murder Mystery Mini: We",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2520,
+   "kw": true
+  },
+  {
+   "id": "17288",
+   "name": "머더 미스터리 미니: 최후의 수아레 / Murder Mystery Mini : I",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 2662,
+   "kw": true
+  },
+  {
+   "id": "17455",
+   "name": "인사이드 팩트: 낙원의 밤 / Inside Fact: Night in Paradi",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 2666,
+   "kw": false
+  },
+  {
+   "id": "15212",
+   "name": "미스터리 파티 시리즈 : 마녀는 황혼의 종소리에 사라진다 / Mystery Par",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2783,
+   "kw": true
+  },
+  {
+   "id": "11213",
+   "name": "시카고그랜드호텔 / Chicago Grand Hotel",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 2863,
+   "kw": false
+  },
+  {
+   "id": "21587",
+   "name": "탁상탐정단: 사신들의 진혼가 / Reaper Song",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 2869,
+   "kw": false
+  },
+  {
+   "id": "20761",
+   "name": "이세계를구할완벽한파티입니다만...? / The perfect party to sa",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2890,
+   "kw": false
+  },
+  {
+   "id": "17456",
+   "name": "인사이드 팩트: 제아의 눈 / Inside Facts: Zea's eyes",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2962,
+   "kw": false
+  },
+  {
+   "id": "21063",
+   "name": "보통의 머더미스터리 / Regular murder mystery",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2980,
+   "kw": true
+  },
+  {
+   "id": "20297",
+   "name": "운명의 세 여신: 우르드 / Norns: Urd",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3008,
+   "kw": false
+  },
+  {
+   "id": "17289",
+   "name": "탁상탐정단: 살인 랜드로 초대합니다 / Welcome to Mascot Murde",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 3031,
+   "kw": false
+  },
+  {
+   "id": "18279",
+   "name": "머더 미스터리 미니: 미싱 파이터 / Murder Mystery Mini: Mis",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 3068,
+   "kw": true
+  },
+  {
+   "id": "20839",
+   "name": "암행 어둠을 걷는 자 / Hidden Wanderer of Darkness",
+   "bgg": null,
+   "weight": null,
+   "ncat": 3,
+   "rank": 3097,
+   "kw": false
+  },
+  {
+   "id": "17117",
+   "name": "탐정 시드 업다이크 : 칼라미티 트루퍼즈 / Detective Sid Updie ",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3135,
+   "kw": false
+  },
+  {
+   "id": "17332",
+   "name": "해피쏘머치 - 머더미스터리 / HAPPY XOO MUCH",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3137,
+   "kw": true
+  },
+  {
+   "id": "16395",
+   "name": "뻐꾸기 새X는 울지않는다. / Thn cuckoo Xhicks do not cry",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3146,
+   "kw": false
+  }
+ ],
+ "name_kw_sample": [
+  {
+   "id": "16070",
+   "name": "머더 미스터리 미니: 웬디, 어른이 되렴 / Murder Mystery Mini ",
+   "bgg": 370749,
+   "weight": 2.0,
+   "ncat": 2,
+   "rank": 19,
+   "kw": true
+  },
+  {
+   "id": "10039",
+   "name": "디텍티브: 모던 크라임 / Detective: A Modern Crime Boar",
+   "bgg": 223321,
+   "weight": 2.74,
+   "ncat": 2,
+   "rank": 243,
+   "kw": true
+  },
+  {
+   "id": "17173",
+   "name": "미스터리 파티 시리즈 : 용사가 죽었다 / Mystery Party in the ",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 401,
+   "kw": true
+  },
+  {
+   "id": "13629",
+   "name": "미크로 마크로: 크라임 시티 / MicroMacro: Crime City",
+   "bgg": 318977,
+   "weight": 1.1,
+   "ncat": 2,
+   "rank": 479,
+   "kw": true
+  },
+  {
+   "id": "15842",
+   "name": "미스터리 파티 시리즈 : 늑대인간 마을의 축제 / Mystery Party in ",
+   "bgg": 364904,
+   "weight": null,
+   "ncat": 1,
+   "rank": 640,
+   "kw": true
+  },
+  {
+   "id": "16892",
+   "name": "머더 미스터리 미니: 보랏못 리라이트 / Murder Mystery Mini : ",
+   "bgg": 379873,
+   "weight": null,
+   "ncat": 2,
+   "rank": 644,
+   "kw": true
+  },
+  {
+   "id": "12223",
+   "name": "미스터리 파티 시리즈: 구두룡 저택의 살인 / Mystery Party in th",
+   "bgg": 336495,
+   "weight": 2.0,
+   "ncat": 1,
+   "rank": 687,
+   "kw": true
+  },
+  {
+   "id": "9665",
+   "name": "사건의 재구성 / Chronicles of Crime",
+   "bgg": 239188,
+   "weight": 2.06,
+   "ncat": 3,
+   "rank": 898,
+   "kw": true
+  },
+  {
+   "id": "16895",
+   "name": "머더 미스터리 미니: 카나리아는 지저귀지 않는다 / Murder Mystery M",
+   "bgg": 415623,
+   "weight": null,
+   "ncat": 2,
+   "rank": 982,
+   "kw": true
+  },
+  {
+   "id": "14664",
+   "name": "미크로 마크로: 크라임 시티- 풀하우스 / MicroMacro: Crime Cit",
+   "bgg": 338834,
+   "weight": 1.17,
+   "ncat": 2,
+   "rank": 1043,
+   "kw": true
+  },
+  {
+   "id": "17168",
+   "name": "미스터리 파티 시리즈 : 끝나지 않는 한여름 / Mystery Party in t",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1135,
+   "kw": true
+  },
+  {
+   "id": "13863",
+   "name": "사건의 재구성: 1400 / Chronicles of Crime: 1400",
+   "bgg": 300300,
+   "weight": 1.99,
+   "ncat": 3,
+   "rank": 1170,
+   "kw": true
+  },
+  {
+   "id": "15596",
+   "name": "머더 미스터리 미니: 시체와 온천 / Murder Mystery Mini : In",
+   "bgg": 370748,
+   "weight": 2.0,
+   "ncat": 2,
+   "rank": 1197,
+   "kw": true
+  },
+  {
+   "id": "17166",
+   "name": "미스터리 파티 시리즈: 다크 율에 속죄를 / Mystery Party in the",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1372,
+   "kw": true
+  },
+  {
+   "id": "17290",
+   "name": "미스터리 파티 시리즈 : 게놈의 탑 / Mystery Party in the Bo",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1470,
+   "kw": true
+  },
+  {
+   "id": "16898",
+   "name": "머더 미스터리 미니: 교토 이세계 투어 / Murder Mystery Mini: ",
+   "bgg": 419570,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1542,
+   "kw": true
+  },
+  {
+   "id": "12960",
+   "name": "목 베는 마을 / Head Village Murder Mystery",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1636,
+   "kw": true
+  },
+  {
+   "id": "15969",
+   "name": "미크로 마크로: 크라임 시티- 올 인 / MicroMacro: Crime City",
+   "bgg": 364766,
+   "weight": 1.08,
+   "ncat": 3,
+   "rank": 1640,
+   "kw": true
+  },
+  {
+   "id": "16893",
+   "name": "머더 미스터리 미니: 시간을 달리는 트라이앵글 / Murder Mystery Mi",
+   "bgg": 379872,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1648,
+   "kw": true
+  },
+  {
+   "id": "15841",
+   "name": "미스터리 파티 인 더 박스: 몇 번이고 푸른 달에 불을 붙였다 / Mystery ",
+   "bgg": 357173,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1660,
+   "kw": true
+  },
+  {
+   "id": "17175",
+   "name": "미스터리 파티 시리즈 : 죄와 벌의 도서관 / Mystery Party in th",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 1701,
+   "kw": true
+  },
+  {
+   "id": "16894",
+   "name": "머더 미스터리 미니: 문스톤 저택 살인 사건 / Murder Mystery Min",
+   "bgg": 415627,
+   "weight": null,
+   "ncat": 2,
+   "rank": 1987,
+   "kw": true
+  },
+  {
+   "id": "17171",
+   "name": "미스터리 파티 시리즈 : 기상천외, 암네시아 / Mystery Party in t",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2022,
+   "kw": true
+  },
+  {
+   "id": "17169",
+   "name": "미스터리 파티 시리즈: 흰 까마귀, 붉게 물들다 / Mystery Party in",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2125,
+   "kw": true
+  },
+  {
+   "id": "10459",
+   "name": "크라임 호텔 / Crime hotel",
+   "bgg": 258748,
+   "weight": 1.71,
+   "ncat": 2,
+   "rank": 2344,
+   "kw": true
+  },
+  {
+   "id": "13242",
+   "name": "디텍티브: 모던 크라임 - 시즌 1 / Detective: A Modern Cri",
+   "bgg": 293531,
+   "weight": 2.03,
+   "ncat": 2,
+   "rank": 2461,
+   "kw": true
+  },
+  {
+   "id": "17122",
+   "name": "머더 미스터리 미니: 주말의 살인귀 / Murder Mystery Mini: We",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2520,
+   "kw": true
+  },
+  {
+   "id": "16897",
+   "name": "머더 미스터리 미니: 별장 살인 / Murder Mystery Mini: Vill",
+   "bgg": 419569,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2536,
+   "kw": true
+  },
+  {
+   "id": "5384",
+   "name": "블랙 스토리즈: 리얼 크라임 / Black Stories: Real Crime E",
+   "bgg": 57052,
+   "weight": 1.27,
+   "ncat": 3,
+   "rank": 2586,
+   "kw": true
+  },
+  {
+   "id": "17288",
+   "name": "머더 미스터리 미니: 최후의 수아레 / Murder Mystery Mini : I",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 2662,
+   "kw": true
+  },
+  {
+   "id": "15212",
+   "name": "미스터리 파티 시리즈 : 마녀는 황혼의 종소리에 사라진다 / Mystery Par",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2783,
+   "kw": true
+  },
+  {
+   "id": "18334",
+   "name": "미니 크라임: 킹은 물속에 / Mini Crimes: The Drowned Kin",
+   "bgg": 364406,
+   "weight": 1.0,
+   "ncat": 3,
+   "rank": 2835,
+   "kw": true
+  },
+  {
+   "id": "10599",
+   "name": "캐치 크라임- 복덕방 살인사건, 귀곡산장 살인사건 / Catch Crime",
+   "bgg": 284502,
+   "weight": 2.0,
+   "ncat": 2,
+   "rank": 2897,
+   "kw": true
+  },
+  {
+   "id": "21063",
+   "name": "보통의 머더미스터리 / Regular murder mystery",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 2980,
+   "kw": true
+  },
+  {
+   "id": "18331",
+   "name": "미니 크라임: 고양이가 쥐를 쫓듯 / Mini Crimes: Like Cat an",
+   "bgg": 364485,
+   "weight": 1.0,
+   "ncat": 3,
+   "rank": 3063,
+   "kw": true
+  },
+  {
+   "id": "18279",
+   "name": "머더 미스터리 미니: 미싱 파이터 / Murder Mystery Mini: Mis",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 3068,
+   "kw": true
+  },
+  {
+   "id": "17332",
+   "name": "해피쏘머치 - 머더미스터리 / HAPPY XOO MUCH",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3137,
+   "kw": true
+  },
+  {
+   "id": "15686",
+   "name": "머더 미스테리: 우주 고릴라 팬데믹 / Murder Mystery : Univer",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3157,
+   "kw": true
+  },
+  {
+   "id": "21148",
+   "name": "미스터리 파티 시리즈: 알바트로스의 황금비 / Mystery Party in th",
+   "bgg": null,
+   "weight": null,
+   "ncat": 2,
+   "rank": 3415,
+   "kw": true
+  },
+  {
+   "id": "17172",
+   "name": "미스터리 파티 시리즈: 별빛 하늘에 소망을 / Mystery Party in th",
+   "bgg": null,
+   "weight": null,
+   "ncat": 1,
+   "rank": 3430,
+   "kw": true
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+[
+  {
+    "id": 16070,
+    "bgg": [
+      "370749"
+    ],
+    "categories": [
+      {
+        "text": "살인/미스터리",
+        "href": "/info/category/24"
+      },
+      {
+        "text": "SF 공상 과학",
+        "href": "/info/category/34"
+      }
+    ],
+    "theme": ""
+  },
+  {
+    "id": 12224,
+    "bgg": [],
+    "categories": [
+      {
+        "text": "블러핑",
+        "href": "/info/category/6"
+      },
+      {
+        "text": "카드 게임",
+        "href": "/info/category/7"
+      },
+      {
+        "text": "마피아",
+        "href": "/info/category/19"
+      }
+    ],
+    "theme": ""
+  },
+  {
+    "id": 16946,
+    "bgg": [
+      "371433"
+    ],
+    "categories": [
+      {
+        "text": "주사위",
+        "href": "/info/category/11"
+      },
+      {
+        "text": "전투",
+        "href": "/info/category/16"
+      },
+      {
+        "text": "공포",
+        "href": "/info/category/17"
+      },
+      {
+        "text": "추론",
+        "href": "/info/category/52"
+      },
+      {
+        "text": "미니어처",
+        "href": "/info/category/64"
+      }
+    ],
+    "theme": "테러스케이프 | 보드게임 평가 및 순위"
+  },
+  {
+    "id": 5352,
+    "bgg": [
+      "156129"
+    ],
+    "categories": [
+      {
+        "text": "블러핑",
+        "href": "/info/category/6"
+      },
+      {
+        "text": "살인/미스터리",
+        "href": "/info/category/24"
+      },
+      {
+        "text": "파티 게임",
+        "href": "/info/category/28"
+      },
+      {
+        "text": "스파이/첩보원",
+        "href": "/info/category/35"
+      },
+      {
+        "text": "추론",
+        "href": "/info/category/52"
+      }
+    ],
+    "theme": ""
+  }
+]
