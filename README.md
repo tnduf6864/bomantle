@@ -52,15 +52,14 @@ cd data
 ## 배포 (Cloudflare)
 
 ```bash
-# Worker
-cd workers/api
-wrangler kv namespace create ANSWERS      # 출력된 id를 wrangler.jsonc 에 입력
-wrangler deploy
+# Worker (실서비스: bomantle-api.bomantle.workers.dev)
+pnpm --filter @bomantle/api run deploy
+#   최초 1회: wrangler kv namespace create ANSWERS → 출력 id를 wrangler.jsonc 에 입력
 
-# Pages (apps/web/out 정적 호스팅)
-cd apps/web
-NEXT_PUBLIC_API_BASE=https://<worker-도메인> pnpm build
-# out/ 을 Cloudflare Pages 에 배포 (wrangler pages deploy out)
+# Pages (apps/web/out 정적 호스팅, 실서비스: bomantle.pages.dev)
+NEXT_PUBLIC_API_BASE=https://bomantle-api.bomantle.workers.dev pnpm --filter @bomantle/web run build
+pnpm --filter @bomantle/web exec wrangler pages deploy out --project-name bomantle
+#   프로덕션 브랜치 = main → 위 배포가 곧장 apex(bomantle.pages.dev)에 반영됨 (--branch 불필요)
 ```
 
 ### 일일 정답 관리
