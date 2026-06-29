@@ -1,14 +1,22 @@
 import type { Game } from "@bomantle/core";
 
-/** Asia/Seoul 기준 "YYYY-MM-DD". */
+/** 매일 게임이 초기화되는 시각(Asia/Seoul 기준, 0~23시). */
+export const RESET_HOUR = 9;
+
+/**
+ * Asia/Seoul 기준 "게임 날짜" YYYY-MM-DD.
+ * 하루 경계가 자정이 아니라 오전 RESET_HOUR시 → 그만큼 시간을 당겨서 날짜를 계산.
+ * 예) 08:59 KST는 아직 전날 퍼즐, 09:00 KST부터 새 퍼즐.
+ */
 export function kstDate(now: Date = new Date()): string {
+  const shifted = new Date(now.getTime() - RESET_HOUR * 3_600_000);
   const f = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   });
-  return f.format(now); // en-CA -> YYYY-MM-DD
+  return f.format(shifted); // en-CA -> YYYY-MM-DD
 }
 
 const EPOCH = "2026-01-01";

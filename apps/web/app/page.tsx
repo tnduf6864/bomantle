@@ -29,10 +29,10 @@ function starRating(n: number): string {
 }
 
 // 공유 텍스트. 정답 이름은 절대 넣지 않음.
-function buildShareText(rows: GuessRow[], puzzleNumber: number): string {
+function buildShareText(rows: GuessRow[]): string {
   const solved = rows.some((r) => r.win);
   const n = rows.length;
-  const head = `🎲 보맨틀 #${puzzleNumber}`;
+  const head = `🎲 보맨틀`;
   if (solved) {
     return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}\n\nhttps://bomantle.pages.dev`;
   }
@@ -40,6 +40,25 @@ function buildShareText(rows: GuessRow[], puzzleNumber: number): string {
   const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
   const best = ranks.length ? Math.min(...ranks) : 0;
   return `${head}\n🏳️ 포기 — 가장 가까웠던 순위 ${best}위\n${n}번 추측\n\nhttps://bomantle.pages.dev`;
+}
+
+// 매일 게임이 초기화되는 시각(Asia/Seoul 기준). 백엔드 RESET_HOUR과 일치시킬 것.
+const RESET_HOUR = 9;
+
+// 다음 초기화(매일 오전 RESET_HOUR시 KST)까지 남은 ms. 클라이언트 타임존과 무관하게 동작.
+function msUntilNextReset(now: Date = new Date()): number {
+  // 로컬 타임존에 KST 벽시계 값을 심은 Date — 두 Date의 차(duration)는 타임존 무관.
+  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const target = new Date(kst);
+  target.setHours(RESET_HOUR, 0, 0, 0);
+  if (kst.getTime() >= target.getTime()) target.setDate(target.getDate() + 1);
+  return target.getTime() - kst.getTime();
+}
+
+function formatCountdown(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 }
 
 function metaText(db: GameDB, g: GameMeta): string {
@@ -64,6 +83,7 @@ export default function Page() {
   const [shareMsg, setShareMsg] = useState("");
   const [hints, setHints] = useState<HintData[]>([]);
   const [hintLoading, setHintLoading] = useState(false);
+  const [countdown, setCountdown] = useState("");
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   // 응답 대기 중인 gameId. 같은 게임 연속 제출(race) 중복 추가 방지.
@@ -120,6 +140,14 @@ export default function Page() {
       JSON.stringify({ rows, won, answer, answerInfo, hints }),
     );
   }, [rows, won, answer, answerInfo, hints, today]);
+
+  // 다음 초기화까지 1초마다 카운트다운 갱신
+  useEffect(() => {
+    const tick = () => setCountdown(formatCountdown(msUntilNextReset()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const guessedIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
 
@@ -195,7 +223,7 @@ export default function Page() {
 
   async function shareResult() {
     if (!today) return;
-    const text = buildShareText(rows, today.puzzleNumber);
+    const text = buildShareText(rows);
     try {
       await navigator.clipboard.writeText(text);
       setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
@@ -270,9 +298,15 @@ export default function Page() {
         <h1>보맨틀 🎲</h1>
         <div className="sub">
           {today
-            ? `#${today.puzzleNumber} · ${today.date} · 매일 보드게임 하나를 유사도로 맞혀보세요`
+            ? `${today.date} · 매일 보드게임 하나를 유사도로 맞혀보세요`
             : "불러오는 중…"}
         </div>
+        {countdown && (
+          <div className="reset-info">
+            ⏰ 다음 문제까지 <b>{countdown}</b>
+            <span className="reset-note">매일 오전 9시 초기화</span>
+          </div>
+        )}
       </header>
 
       {won && (
@@ -281,14 +315,14 @@ export default function Page() {
             <>
               🎉 정답은 <b>{answer}</b>!
               <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-                {rows.length}번 만에 맞혔어요 · 내일 새 문제로 다시 만나요
+                {rows.length}번 만에 맞혔어요 · 매일 오전 9시 새 문제로 다시 만나요
               </div>
             </>
           ) : (
             <>
               정답은 <b>{answer}</b> 였어요.
               <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
-                {rows.length}번 추측 후 포기 · 내일 새 문제로 다시 만나요
+                {rows.length}번 추측 후 포기 · 매일 오전 9시 새 문제로 다시 만나요
               </div>
             </>
           )}

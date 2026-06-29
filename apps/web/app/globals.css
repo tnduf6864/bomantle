@@ -42,6 +42,30 @@ header.top .sub {
   color: var(--muted);
   font-size: 13px;
 }
+.reset-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 5px 12px;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.reset-info b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+.reset-info .reset-note {
+  font-size: 11px;
+  color: var(--muted);
+  padding-left: 8px;
+  border-left: 1px solid var(--border);
+}
 
 .input-area {
   position: relative;
