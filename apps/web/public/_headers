@@ -1,4 +1,11 @@
-# OG 이미지는 확장자가 없어 기본 octet-stream으로 서빙됨 → 카카오톡 등이 거부할 수 있어 PNG로 교정
+# 확장자 없는 메타 이미지들은 기본 octet-stream으로 서빙됨 → PNG로 교정
+# (OG는 카카오톡 등이 octet-stream을 거부할 수 있어 특히 중요)
 /opengraph-image
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+/icon
+  Content-Type: image/png
+  Cache-Control: public, max-age=86400
+/apple-icon
   Content-Type: image/png
   Cache-Control: public, max-age=86400
