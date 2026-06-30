@@ -36,14 +36,18 @@ interface DayState {
 }
 
 // 비싼 랭킹은 answerId 기준으로만 캐시 (isolate 메모리).
-// KV 오버라이드는 매 요청 확인 → 정답을 바꾸면 재배포 없이 즉시 반영.
+// KV 오버라이드는 cacheTtl로 엣지 캐시 → 무료 플랜 KV 읽기 한도(10만/일) 절약.
+// 정답을 바꾸면 최대 KV_CACHE_TTL초 후 반영(즉시 아님).
 const rankCache = new Map<number, { ranking: ScoredGame[]; pos: Map<number, number> }>();
+
+// 같은 날짜 키(answer:DATE)를 엣지에 캐시해 KV 읽기 횟수를 대폭 줄임.
+const KV_CACHE_TTL = 300;
 
 async function getDayState(env: Env, date: string): Promise<DayState> {
   // KV 오버라이드 우선, 없으면 시드 결정론
   let answerId: number | undefined;
   if (env.ANSWERS) {
-    const v = await env.ANSWERS.get(`answer:${date}`);
+    const v = await env.ANSWERS.get(`answer:${date}`, { cacheTtl: KV_CACHE_TTL });
     if (v) answerId = Number(v);
   }
   if (answerId == null || !index.byId.has(answerId)) {
