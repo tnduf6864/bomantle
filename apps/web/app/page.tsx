@@ -454,6 +454,7 @@ export default function Page() {
         <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
           💬 문의·제보
         </a>
+        <span className="credit">제작자: 문보미</span>
       </footer>
     </div>
   );
