@@ -45,6 +45,11 @@ function buildShareText(rows: GuessRow[]): string {
 // 매일 게임이 초기화되는 시각(Asia/Seoul 기준). 백엔드 RESET_HOUR과 일치시킬 것.
 const RESET_HOUR = 9;
 
+// 문의·제보 구글폼. 응답은 연결된 구글 스프레드시트로 자동 수집됨.
+// 폼 생성 후 "보내기 → 링크(🔗)"의 단축 URL을 여기에 붙여넣으면 됨.
+const FEEDBACK_URL =
+  "https://docs.google.com/forms/d/e/1FAIpQLSedokjNlrAy5I6u73BgqDsAYwyjSSbZ1N2S4ndsdPCXa_pcvw/viewform";
+
 // 다음 초기화(매일 오전 RESET_HOUR시 KST)까지 남은 ms. 클라이언트 타임존과 무관하게 동작.
 function msUntilNextReset(now: Date = new Date()): number {
   // 로컬 타임존에 KST 벽시계 값을 심은 Date — 두 Date의 차(duration)는 타임존 무관.
@@ -444,6 +449,12 @@ export default function Page() {
           <button onClick={onGiveup}>포기하고 정답 보기</button>
         </div>
       )}
+
+      <footer className="site-footer">
+        <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
+          💬 문의·제보
+        </a>
+      </footer>
     </div>
   );
 }

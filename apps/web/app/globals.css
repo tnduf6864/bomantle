@@ -126,6 +126,20 @@ header.top .sub {
 
 .hint { color: var(--muted); font-size: 12px; margin: 4px 2px 16px; }
 
+.site-footer {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+.site-footer a {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color 0.1s;
+}
+.site-footer a:hover { color: var(--accent); }
+
 .hints { margin: 0 0 16px; display: flex; flex-direction: column; gap: 6px; }
 .hint-item {
   display: flex;
