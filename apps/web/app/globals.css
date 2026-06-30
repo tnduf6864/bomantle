@@ -111,10 +111,17 @@ header.top .sub {
   padding: 10px 14px;
   cursor: pointer;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
+  border-left: 3px solid transparent;
+  transition: background 0.08s, border-color 0.08s;
 }
-.suggest .item:hover, .suggest .item.active { background: var(--panel); }
+.suggest .item.active {
+  background: rgba(91, 140, 255, 0.18);
+  border-left-color: var(--accent);
+}
+.suggest .item.active span:first-child { color: var(--text); font-weight: 600; }
 .suggest .item .en { color: var(--muted); font-size: 12px; }
 
 .hint { color: var(--muted); font-size: 12px; margin: 4px 2px 16px; }
