@@ -264,6 +264,8 @@ export default function Page() {
       }
     }
     if (e.key === "Enter") {
+      // 한글 IME 조합 중 발생하는 Enter(조합 확정용)는 무시 — 이중 제출 방지
+      if (e.nativeEvent.isComposing || (e.nativeEvent as KeyboardEvent).keyCode === 229) return;
       e.preventDefault();
       const pick = suggestions[activeIdx];
       // 자동완성 선택 시 그 게임을 id로 직접 제출(동명 게임 구분), 아니면 텍스트 해석
