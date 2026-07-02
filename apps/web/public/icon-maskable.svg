@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- 마스커블: 배경을 꽉 채우고(풀블리드) 주사위는 중앙 안전영역(약 60%) 안에 둔다 -->
+  <rect width="512" height="512" fill="#5b8cff"/>
+  <rect x="106" y="106" width="300" height="300" rx="68" fill="#ffffff"/>
+  <g fill="#5b8cff">
+    <circle cx="187" cy="187" r="25"/>
+    <circle cx="325" cy="187" r="25"/>
+    <circle cx="256" cy="256" r="25"/>
+    <circle cx="187" cy="325" r="25"/>
+    <circle cx="325" cy="325" r="25"/>
+  </g>
+</svg>

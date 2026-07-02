@@ -9,3 +9,19 @@
 /apple-icon
   Content-Type: image/png
   Cache-Control: public, max-age=86400
+
+# PWA manifest — 일부 CDN이 확장자를 octet-stream으로 서빙 → 명시 교정
+/manifest.webmanifest
+  Content-Type: application/manifest+json
+
+# 서비스워커는 항상 최신 확인(재검증) → 배포 시 SW 갱신 지연 방지
+/sw.js
+  Content-Type: text/javascript
+  Cache-Control: no-cache
+
+/icon.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=86400
+/icon-maskable.svg
+  Content-Type: image/svg+xml
+  Cache-Control: public, max-age=86400

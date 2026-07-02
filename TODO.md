@@ -23,14 +23,15 @@
 - [ ] CORS/도메인 확인 — 워커 CORS는 `*`로 열려 있음. 커스텀 도메인 쓰면 좁히기 검토.
 - [ ] 배포 후 실제 /api/guess 동작 확인.
 
-## 2. PWA 실제 구성 ⭐ (지금 themeColor만 있고 manifest·아이콘·SW 없음)
+## 2. PWA 실제 구성 ✅ 완료
 
-- [ ] `apps/web/public/manifest.webmanifest` 작성 (name, short_name, icons, theme/bg color, display:standalone)
-- [ ] 아이콘 생성 (192/512 png, maskable 포함) → `public/`
-- [ ] `app/layout.tsx` metadata에 manifest 연결 (`manifest: "/manifest.webmanifest"`)
-- [ ] 오프라인/캐시 서비스워커 — 정적 export라 `next-pwa` 대신 간단한 SW 직접 등록 권장
-      (games.json·앱셸 캐시). 정답 API는 캐시 제외.
-- [ ] iOS 대응 메타(apple-touch-icon 등).
+- [x] `app/manifest.ts` → `/manifest.webmanifest` (name, short_name, icons, theme/bg, standalone)
+- [x] 아이콘 — 벡터 `public/icon.svg`(any) + `icon-maskable.svg`(maskable). 래스터라이저 없어 SVG(sizes:"any", Chrome 설치 기준 충족) 채택
+- [x] `layout.tsx` metadata에 manifest 연결 + appleWebApp 메타
+- [x] 서비스워커 `public/sw.js` — 앱셸+games.json/categories.json 캐시(cache-first, 내비게이션은 network-first). 정답 API는 크로스오리진이라 same-origin 필터로 자동 제외. `sw-register.tsx`로 등록
+- [x] iOS 메타 — 기존 `apple-icon.tsx`(180px) + appleWebApp
+- [ ] (선택) 실제 기기에서 "홈 화면 추가" 설치·오프라인 동작 최종 확인
+- [ ] (참고) 배포로 앱셸/데이터가 바뀌면 `sw.js`의 `CACHE` 버전(`bomantle-v1`)을 올릴 것
 
 ## 3. 정답 풀 큐레이션 정교화
 
@@ -42,11 +43,11 @@
 - [ ] 풀 크기(1200) 적정성 — 너무 작으면 반복, 크면 난해
 - [ ] (선택) 정답 풀을 데이터 파이프라인에서 미리 만들어 검수 후 KV/파일로 고정
 
-## 4. 결과 공유 기능
+## 4. 결과 공유 기능 ✅ 구현됨 (page.tsx buildShareText / shareResult)
 
-- [ ] 승리 시 "🎲 보맨틀 #176 · N번 만에!" + 추측 점수 막대 이모지 공유 텍스트 생성
-- [ ] 클립보드 복사 버튼 (꼬맨틀/워들 스타일)
-- [ ] 정답은 텍스트에 노출하지 않기.
+- [x] 승리·포기 공유 텍스트 생성 (별점·최근접 순위, 정답명 미노출)
+- [x] 클립보드 복사 버튼
+- [ ] (선택) 추측 점수 막대 이모지 그리드(워들식) 추가 검토
 
 ## 5. 자잘한 UX
 

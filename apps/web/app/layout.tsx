@@ -1,10 +1,17 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import SwRegister from "./sw-register";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://bomantle.pages.dev"),
   title: "보맨틀 — 보드게임 맞추기",
   description: "매일 하나의 보드게임을 유사도 힌트로 맞히는 게임. 꼬맨틀의 보드게임 버전.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "보맨틀",
+  },
   openGraph: {
     title: "보맨틀 🎲 — 매일 보드게임 맞히기",
     description: "매일 하나의 보드게임을 유사도로 맞혀보세요. 꼬맨틀의 보드게임 버전!",
@@ -29,7 +36,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {children}
+        <SwRegister />
+      </body>
     </html>
   );
 }
