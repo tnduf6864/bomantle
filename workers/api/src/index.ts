@@ -8,6 +8,7 @@ import {
 import gamesData from "./games.json";
 import catData from "./categories.json";
 import mechData from "./mechanisms.json";
+import boxartIds from "./boxart.json";
 import {
   kstDate,
   puzzleNumber,
@@ -23,6 +24,8 @@ const mechanisms = mechData as Record<string, string>;
 // 콜드 스타트 1회: 인덱스 + 정답 풀 구성 (isolate 동안 재사용)
 const index = buildIndex(games);
 const pool = buildAnswerPool(games);
+// 재호스팅된 박스아트가 있는 게임 id (빌드 시 data 스크립트가 생성).
+const boxartSet = new Set<number>(boxartIds as number[]);
 
 interface Env {
   ANSWERS?: KVNamespace;
@@ -90,6 +93,16 @@ function json(body: unknown, req: Request, status = 200): Response {
   });
 }
 
+/**
+ * 정답 박스아트 URL(사이트 오리진 기준 상대 경로).
+ * 보드라이프(Cloudflare 뒤)는 브라우저 크로스오리진(503)·서버/Worker(403) 이미지
+ * 요청을 모두 막는다. 그래서 정답 풀 이미지는 빌드 시 미리 받아 Pages에 재호스팅하고
+ * (/boxart/<id>.jpg) same-origin으로 서빙한다. 재호스팅된 이미지가 없으면 null.
+ */
+function imageUrl(game: { id: number }): string | null {
+  return boxartSet.has(game.id) ? `/boxart/${game.id}.jpg` : null;
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     if (req.method === "OPTIONS")
@@ -129,7 +142,7 @@ export default {
       if (result.win) {
         const ans = games.find((g) => g.id === day.answerId)!;
         return json(
-          { ...result, answer: { id: ans.id, name_ko: ans.name_ko, image: ans.image ?? null } },
+          { ...result, answer: { id: ans.id, name_ko: ans.name_ko, image: imageUrl(ans) } },
           req,
         );
       }
@@ -146,7 +159,7 @@ export default {
             id: ans.id,
             name_ko: ans.name_ko,
             name_en: ans.name_en,
-            image: ans.image ?? null,
+            image: imageUrl(ans),
           },
         },
         req,
