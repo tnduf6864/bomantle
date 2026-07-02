@@ -42,7 +42,7 @@ cd data
 ./.venv/Scripts/python crawl_detail.py    # 상세(BGG id·테마·진행방식·인원/난이도·평가수·이미지)
 ./.venv/Scripts/python build_clean.py     # 머더 키트 제외 → games_clean.json (+ category/mechanism 이름맵)
 ./.venv/Scripts/python build_artifacts.py # → out/{games.json(풀), games.web.json(슬림), categories.json, mechanisms.json}
-# 산출물 복사:
+# build_artifacts.py가 out/ 생성 후 워커·웹 소비처로 자동 복사한다:
 #   out/games.json      → workers/api/src/games.json   (풀: 엔진+힌트+큐레이션. 진행방식·평가수 포함)
 #   out/games.web.json  → apps/web/public/games.json   (슬림: 클라 자동완성·표시용)
 #   out/categories.json → workers/api/src/ 및 apps/web/public/

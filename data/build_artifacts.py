@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 
 clean = json.load(open("games_clean.json", encoding="utf-8"))
 catnames = json.load(open("category_names.json", encoding="utf-8"))
@@ -31,3 +32,23 @@ json.dump(mechnames, open("out/mechanisms.json", "w", encoding="utf-8"), ensure_
 print("games.json (full):", len(full), "games,", os.path.getsize("out/games.json") // 1024, "KB")
 print("games.web.json (slim):", len(slim), "games,", os.path.getsize("out/games.web.json") // 1024, "KB")
 print("categories:", len(catnames), "| mechanisms:", len(mechnames))
+
+# 산출물 배포: out/ → 워커·웹 소비처로 복사 (README의 매핑과 동일).
+#   games.json      → 워커(엔진+힌트+큐레이션, 풀 버전)
+#   games.web.json  → 웹 public/games.json (자동완성·표시용 슬림 버전)
+#   categories.json → 워커 + 웹 양쪽
+#   mechanisms.json → 워커(힌트용)
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORKER = os.path.join(ROOT, "workers", "api", "src")
+WEB = os.path.join(ROOT, "apps", "web", "public")
+DIST = [
+    ("out/games.json", os.path.join(WORKER, "games.json")),
+    ("out/games.web.json", os.path.join(WEB, "games.json")),
+    ("out/categories.json", os.path.join(WORKER, "categories.json")),
+    ("out/categories.json", os.path.join(WEB, "categories.json")),
+    ("out/mechanisms.json", os.path.join(WORKER, "mechanisms.json")),
+]
+print("\n배포(복사):")
+for src, dst in DIST:
+    shutil.copyfile(src, dst)
+    print(f"  {src} -> {os.path.relpath(dst, ROOT)}")

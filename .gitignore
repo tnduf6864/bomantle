@@ -29,3 +29,7 @@ data/*.log
 # misc
 .DS_Store
 *.tsbuildinfo
+
+# codegraph local index / editor rules (재생성 가능)
+.codegraph/
+.cursor/
