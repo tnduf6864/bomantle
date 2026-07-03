@@ -1,15 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { Game } from "./types.ts";
 import { buildIndex, rankAgainst, toScore, similarity } from "./engine.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const games: Game[] = JSON.parse(
-  readFileSync(resolve(here, "../../../data/out/games.json"), "utf-8"),
-);
+// 데이터 산출물(data/out)은 gitignore이므로 CI/새 클론에는 없다.
+// 동일 내용(빌드가 복사)의 추적되는 워커 번들 games.json으로 폴백.
+const dataOut = resolve(here, "../../../data/out/games.json");
+const gamesPath = existsSync(dataOut)
+  ? dataOut
+  : resolve(here, "../../../workers/api/src/games.json");
+const games: Game[] = JSON.parse(readFileSync(gamesPath, "utf-8"));
 const idx = buildIndex(games);
 const byName = (s: string) =>
   games.find((g) => (g.name_ko ?? "").includes(s) || (g.name_en ?? "").toLowerCase().includes(s.toLowerCase()))!;

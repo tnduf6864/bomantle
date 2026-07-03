@@ -11,5 +11,7 @@
     "resolveJsonModule": false,
     "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  // 테스트는 node:test(Node 타입)라 워커 타입셋과 분리. 실행/검증은 `node --test`가 담당.
+  "exclude": ["src/**/*.test.ts"]
 }

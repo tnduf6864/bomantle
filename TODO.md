@@ -84,15 +84,22 @@
 - [x] `app/robots.ts` → `/robots.txt` (전체 허용 + 사이트맵 위치)
 - [x] `app/sitemap.ts` → `/sitemap.xml`
 - [x] 구조화 데이터 JSON-LD(WebApplication) — `layout.tsx`
-- [ ] **Google Search Console 등록**(사용자 Google 계정 필요) — 핵심 수동 단계
-  - 속성 추가(URL 접두어 `https://bomantle.pages.dev`)
-  - 소유 확인: HTML 태그 방식 → 발급 코드를 `layout.tsx`
-    `metadata.verification.google`에 입력(주석 처리해둠) 후 재배포
-  - 사이트맵 제출 + URL 검사에서 "색인 생성 요청"
+- [x] **Google Search Console 등록** — 소유 확인(HTML 태그, `metadata.verification.google`) +
+  사이트맵 제출 완료. 이후 색인 반영은 구글 크롤링 대기(수일~수주).
 - [ ] (선택) 커스텀 도메인(예: bomantle.com) 연결 시 브랜딩·신뢰도↑
 - [ ] (참고) 신규 사이트는 색인까지 수일~수주. "보맨틀"은 고유어라 색인되면 1위 예상
 
-## 8. (나중) Expo 모바일 앱
+## 8. 테스트 / CI ✅
+
+- [x] 워커 순수 함수 유닛테스트 — `workers/api/src/hint.test.ts`(초성·난이도밴드·commonest를
+  buildHint 블랙박스로), `answer.test.ts`(buildAnswerPool 필터·프랜차이즈 dedup·정렬,
+  dailyAnswerFromSeed 결정론, kstDate 9시 경계, puzzleNumber). `pnpm --filter @bomantle/api test`
+- [x] core 테스트 CI-안전화: `data/out`(gitignore) 없으면 추적되는 `workers/api/src/games.json`
+  (동일 SHA)로 폴백 — `engine.test.ts`
+- [x] GitHub Actions `.github/workflows/ci.yml` — install → core/api typecheck+test → web build
+- [x] 워커 tsconfig에서 `*.test.ts` 제외(Node 타입 vs workers-types 분리, 배포 번들 무관)
+
+## 9. (나중) Expo 모바일 앱
 
 - [ ] `apps/mobile` (Expo) 추가, `packages/core` + 같은 Worker API 재사용
 - [ ] 화면은 웹 UI 이식

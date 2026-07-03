@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 루트 package.json의 packageManager(pnpm@…) 버전을 그대로 사용
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # core/api: 순수 TS라 바로 타입체크 + 유닛테스트
+      - name: Typecheck core & api
+        run: pnpm --filter @bomantle/core --filter @bomantle/api typecheck
+
+      - name: Test core & api
+        run: pnpm --filter @bomantle/core --filter @bomantle/api test
+
+      # web: next build가 타입검증까지 수행(next-env가 .next/types 참조 → 빌드 후 검증)
+      - name: Build web
+        run: pnpm --filter @bomantle/web build
+        env:
+          NEXT_PUBLIC_API_BASE: https://bomantle-api.bomantle.workers.dev
