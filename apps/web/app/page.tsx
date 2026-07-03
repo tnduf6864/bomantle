@@ -29,17 +29,19 @@ function starRating(n: number): string {
 }
 
 // 공유 텍스트. 정답 이름은 절대 넣지 않음.
-function buildShareText(rows: GuessRow[]): string {
+function buildShareText(rows: GuessRow[], hintCount: number): string {
   const solved = rows.some((r) => r.win);
   const n = rows.length;
   const head = `🎲 보맨틀`;
+  // 힌트 사용 횟수: 1회당 💀
+  const hintLine = hintCount > 0 ? `\n💡 힌트횟수 ${"💀".repeat(hintCount)}` : "";
   if (solved) {
-    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}\n\nhttps://bomantle.pages.dev`;
+    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${hintLine}\n\nhttps://bomantle.pages.dev`;
   }
   // 포기: 가장 가까이 갔던 순위 (자랑 + 스포일러 없음)
   const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
   const best = ranks.length ? Math.min(...ranks) : 0;
-  return `${head}\n🏳️ 포기 — 가장 가까웠던 순위 ${best}위\n${n}번 추측\n\nhttps://bomantle.pages.dev`;
+  return `${head}\n🏳️ 포기 — 가장 가까웠던 순위 ${best}위\n${n}번 추측${hintLine}\n\nhttps://bomantle.pages.dev`;
 }
 
 // 매일 게임이 초기화되는 시각(Asia/Seoul 기준). 백엔드 RESET_HOUR과 일치시킬 것.
@@ -228,7 +230,7 @@ export default function Page() {
 
   async function shareResult() {
     if (!today) return;
-    const text = buildShareText(rows);
+    const text = buildShareText(rows, hints.length);
     try {
       await navigator.clipboard.writeText(text);
       setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
