@@ -31,7 +31,7 @@
 - [x] 서비스워커 `public/sw.js` — 앱셸+games.json/categories.json 캐시(cache-first, 내비게이션은 network-first). 정답 API는 크로스오리진이라 same-origin 필터로 자동 제외. `sw-register.tsx`로 등록
 - [x] iOS 메타 — 기존 `apple-icon.tsx`(180px) + appleWebApp
 - [ ] (선택) 실제 기기에서 "홈 화면 추가" 설치·오프라인 동작 최종 확인
-- [ ] (참고) 배포로 앱셸/데이터가 바뀌면 `sw.js`의 `CACHE` 버전(`bomantle-v1`)을 올릴 것
+- [ ] (참고) 배포로 앱셸/데이터가 바뀌면 `sw.js`의 `CACHE` 버전을 올릴 것 (현재 `bomantle-v2`)
 
 ## 3. 정답 풀 큐레이션 정교화
 
@@ -51,13 +51,48 @@
 
 ## 5. 자잘한 UX
 
-- [ ] 통계: 플레이 일수·연속 정답·추측 횟수 분포 (localStorage)
+- [x] 하루 경계(오전 9시) 자동 전환: 탭 열어둔 채 날짜가 넘어가면 서버 재조회로 새 판 자동 리셋
+  (`page.tsx` `clientPuzzleDate`=서버 kstDate와 동일 규칙, `applyDay` 공용화, 1초 폴링+30s 백오프)
+
+- [x] 통계: 플레이 일수·정답률·연속 정답(현재/최고)·추측 횟수 분포 (localStorage `bomantle:stats`, `lib/stats.ts`). 헤더 📊 + 완료 배너 버튼으로 모달. 공유에 🔥연속 N일 추가
 - [ ] 시간대별/추측횟수별 힌트 (예: 10회마다 카테고리 1개 공개)
 - [ ] 모바일 입력/자동완성 키보드 동작 다듬기
 - [ ] 추측 리스트 가장 가까운 항목 상단 고정 표시 강화
 - [ ] 빈 상태/로딩/에러 카피 다듬기
 
-## 6. (나중) Expo 모바일 앱
+## 6. 전체 익명 집계 통계 (백엔드 신규)
+
+개인 통계(5번, localStorage)와 별개로 "오늘의 전체 현황"을 보여주는 기능.
+정답명·개인 식별자 없이 **익명 카운트만** 수집·집계한다.
+
+- [ ] 저장소: **D1 권장**(원자적 UPSERT로 동시 쓰기 안전) 또는 Durable Object.
+      KV 단독은 read-modify-write 경쟁으로 카운트 유실 → 지양.
+- [ ] 수집 엔드포인트 `POST /api/result { solved, guesses }` (워커)
+  - 날짜는 서버 `kstDate()`로 결정(클라 입력 신뢰 안 함)
+  - 집계 필드: 플레이 수, 정답 수, 추측 횟수 합/분포(버킷 재사용)
+  - 어뷰즈: 클라 `localStorage`에 제출 완료 플래그 → 하루 1회만 전송.
+    서버측도 과도 방지 검토(간단한 rate limit 또는 중복 허용하되 영향 최소)
+- [ ] 조회 엔드포인트 `GET /api/stats?date=YYYY-MM-DD`
+      → `{ players, winRate, avgGuesses, dist }` (엣지 캐시로 KV/D1 읽기 절약)
+- [ ] 웹: 통계 모달에 "오늘의 전체 현황" 카드 추가(개인 통계 위/아래).
+      집계 버킷 분포는 개인 분포와 같은 UI 재사용(`lib/stats.ts` 버킷 공유)
+- [ ] 개인정보 원칙: 식별자·정답명 미수집. 순수 카운트만.
+
+## 7. 검색 노출(SEO)
+
+- [x] 메타데이터(title·description·OG·twitter·keywords·canonical) — `layout.tsx`
+- [x] `app/robots.ts` → `/robots.txt` (전체 허용 + 사이트맵 위치)
+- [x] `app/sitemap.ts` → `/sitemap.xml`
+- [x] 구조화 데이터 JSON-LD(WebApplication) — `layout.tsx`
+- [ ] **Google Search Console 등록**(사용자 Google 계정 필요) — 핵심 수동 단계
+  - 속성 추가(URL 접두어 `https://bomantle.pages.dev`)
+  - 소유 확인: HTML 태그 방식 → 발급 코드를 `layout.tsx`
+    `metadata.verification.google`에 입력(주석 처리해둠) 후 재배포
+  - 사이트맵 제출 + URL 검사에서 "색인 생성 요청"
+- [ ] (선택) 커스텀 도메인(예: bomantle.com) 연결 시 브랜딩·신뢰도↑
+- [ ] (참고) 신규 사이트는 색인까지 수일~수주. "보맨틀"은 고유어라 색인되면 1위 예상
+
+## 8. (나중) Expo 모바일 앱
 
 - [ ] `apps/mobile` (Expo) 추가, `packages/core` + 같은 Worker API 재사용
 - [ ] 화면은 웹 UI 이식

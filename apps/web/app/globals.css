@@ -30,9 +30,24 @@ html, body {
 }
 
 header.top {
+  position: relative;
   text-align: center;
   margin-bottom: 18px;
 }
+.stats-open {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 38px;
+  height: 38px;
+  font-size: 18px;
+  line-height: 1;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.stats-open:active { transform: translateY(1px); }
 header.top h1 {
   font-size: 28px;
   margin: 0 0 4px;
@@ -217,10 +232,137 @@ header.top .sub {
   cursor: pointer;
 }
 .share-btn:active { transform: translateY(1px); }
+.banner-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.banner-actions .share-btn { margin-top: 0; }
+.stats-btn {
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.stats-btn:active { transform: translateY(1px); }
 .share-msg {
   margin-top: 10px;
   font-size: 13px;
   color: var(--muted);
+}
+
+/* ===== 통계 모달 ===== */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  animation: popIn 0.18s ease;
+}
+@keyframes popIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.modal-head h2 { margin: 0; font-size: 18px; }
+.modal-close {
+  width: 30px;
+  height: 30px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.modal-close:hover { background: var(--panel-2); color: var(--text); }
+
+.stats-empty {
+  text-align: center;
+  color: var(--text);
+  font-weight: 600;
+  padding: 20px 8px;
+}
+.stats-empty span {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.stat-cell { text-align: center; }
+.stat-num {
+  font-size: 24px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.dist-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.dist-row {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 5px;
+}
+.dist-lbl {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.dist-bar { height: 20px; }
+.dist-fill {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  min-width: 0;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+.dist-fill.hi { background: var(--cool); }
+.dist-fill em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
 }
 
 .row {

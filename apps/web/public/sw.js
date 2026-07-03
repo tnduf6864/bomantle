@@ -1,7 +1,7 @@
 // 보맨틀 서비스워커 — 앱셸 + 정적 데이터 오프라인 캐시.
 // 정답 API는 크로스오리진(워커 도메인)이라 same-origin 필터에서 자동 제외됨 → 캐시 안 됨.
 // 배포로 앱셸/데이터가 바뀌면 CACHE 버전을 올려 이전 캐시를 폐기한다.
-const CACHE = "bomantle-v1";
+const CACHE = "bomantle-v2";
 
 // 안정 URL만 사전 캐시. _next 해시 자산은 첫 요청 시 런타임 캐시(cache-first)로 담긴다.
 const SHELL = [

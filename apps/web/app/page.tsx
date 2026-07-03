@@ -1,9 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameMeta, GuessRow, HintData, TodayInfo } from "../lib/types";
 import { loadGameDB, resolve, suggest, categoryNames, type GameDB } from "../lib/games";
 import { fetchToday, fetchGuess, fetchGiveup, fetchHint } from "../lib/api";
+import {
+  loadStats,
+  recordResult,
+  winRate,
+  bucketOf,
+  GUESS_BUCKETS,
+  type Stats,
+} from "../lib/stats";
 
 function barColor(row: GuessRow): string {
   if (row.win) return "var(--cool)";
@@ -29,14 +37,16 @@ function starRating(n: number): string {
 }
 
 // 공유 텍스트. 정답 이름은 절대 넣지 않음.
-function buildShareText(rows: GuessRow[], hintCount: number): string {
+function buildShareText(rows: GuessRow[], hintCount: number, streak = 0): string {
   const solved = rows.some((r) => r.win);
   const n = rows.length;
   const head = `🎲 보맨틀`;
   // 힌트 사용 횟수: 1회당 💀
   const hintLine = hintCount > 0 ? `\n💡 힌트횟수 ${"💀".repeat(hintCount)}` : "";
+  // 연속 정답(2일 이상일 때만 자랑)
+  const streakLine = solved && streak >= 2 ? `\n🔥 연속 ${streak}일` : "";
   if (solved) {
-    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${hintLine}\n\nhttps://bomantle.pages.dev`;
+    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${streakLine}${hintLine}\n\nhttps://bomantle.pages.dev`;
   }
   // 포기: 가장 가까이 갔던 순위 (자랑 + 스포일러 없음)
   const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
@@ -51,6 +61,18 @@ const RESET_HOUR = 9;
 // 폼 생성 후 "보내기 → 링크(🔗)"의 단축 URL을 여기에 붙여넣으면 됨.
 const FEEDBACK_URL =
   "https://docs.google.com/forms/d/e/1FAIpQLSedokjNlrAy5I6u73BgqDsAYwyjSSbZ1N2S4ndsdPCXa_pcvw/viewform";
+
+// 현재 "퍼즐 날짜"(YYYY-MM-DD). 서버 data/answer.ts의 kstDate와 동일 규칙:
+// KST에서 RESET_HOUR시만큼 당겨 날짜를 계산(오전 9시 경계). 하루 경계 감지에 사용.
+function clientPuzzleDate(now: Date = new Date()): string {
+  const shifted = new Date(now.getTime() - RESET_HOUR * 3_600_000);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(shifted);
+}
 
 // 다음 초기화(매일 오전 RESET_HOUR시 KST)까지 남은 ms. 클라이언트 타임존과 무관하게 동작.
 function msUntilNextReset(now: Date = new Date()): number {
@@ -91,12 +113,58 @@ export default function Page() {
   const [hints, setHints] = useState<HintData[]>([]);
   const [hintLoading, setHintLoading] = useState(false);
   const [countdown, setCountdown] = useState("");
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [showStats, setShowStats] = useState(false);
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   // 응답 대기 중인 gameId. 같은 게임 연속 제출(race) 중복 추가 방지.
   const inFlightRef = useRef<Set<number>>(new Set());
+  // 하루 경계 재조회 진행 중 플래그(중복 fetch 방지).
+  const rollingRef = useRef(false);
 
-  // 초기 로드
+  // 특정 퍼즐 날짜의 판을 화면에 적용: 상태 초기화 후 로컬 저장(같은 날짜) 복원.
+  // 최초 로드와 하루 경계(오전 9시) 자동 전환에서 공용.
+  const applyDay = useCallback((info: TodayInfo) => {
+    setToday(info);
+    // 이전 판 상태 초기화
+    setRows([]);
+    setWon(false);
+    setAnswer(null);
+    setAnswerInfo(null);
+    setHints([]);
+    setQuery("");
+    setError("");
+    setShareMsg("");
+    seqRef.current = 0;
+    inFlightRef.current.clear();
+    // 로컬 저장 복원 (같은 날짜만)
+    try {
+      const raw = localStorage.getItem(`bomantle:${info.date}`);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as {
+        rows: GuessRow[];
+        won: boolean;
+        answer: string | null;
+        answerInfo?: { id: number; image: string | null } | null;
+        hints?: HintData[];
+      };
+      setRows(saved.rows ?? []);
+      setWon(saved.won ?? false);
+      setAnswer(saved.answer ?? null);
+      setHints(saved.hints ?? []);
+      seqRef.current = saved.rows?.length ?? 0;
+      if (saved.answerInfo) {
+        setAnswerInfo(saved.answerInfo);
+      } else if (saved.won) {
+        // 구버전 저장(박스아트·링크 정보 없음) → 정답 정보 다시 가져와 복구
+        fetchGiveup()
+          .then((r) => setAnswerInfo({ id: r.answer.id, image: r.answer.image ?? null }))
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  // 초기 로드 (DB는 1회만, 오늘 판 적용)
   useEffect(() => {
     (async () => {
       let info: TodayInfo;
@@ -109,35 +177,9 @@ export default function Page() {
         return;
       }
       setDb(database);
-      setToday(info);
-      // 로컬 저장 복원 (같은 날짜만)
-      try {
-        const raw = localStorage.getItem(`bomantle:${info.date}`);
-        if (raw) {
-          const saved = JSON.parse(raw) as {
-            rows: GuessRow[];
-            won: boolean;
-            answer: string | null;
-            answerInfo?: { id: number; image: string | null } | null;
-            hints?: HintData[];
-          };
-          setRows(saved.rows ?? []);
-          setWon(saved.won ?? false);
-          setAnswer(saved.answer ?? null);
-          setHints(saved.hints ?? []);
-          seqRef.current = saved.rows?.length ?? 0;
-          if (saved.answerInfo) {
-            setAnswerInfo(saved.answerInfo);
-          } else if (saved.won) {
-            // 구버전 저장(박스아트·링크 정보 없음) → 정답 정보 다시 가져와 복구
-            fetchGiveup()
-              .then((r) => setAnswerInfo({ id: r.answer.id, image: r.answer.image ?? null }))
-              .catch(() => {});
-          }
-        }
-      } catch {}
+      applyDay(info);
     })();
-  }, []);
+  }, [applyDay]);
 
   // 저장
   useEffect(() => {
@@ -148,6 +190,18 @@ export default function Page() {
     );
   }, [rows, won, answer, answerInfo, hints, today]);
 
+  // 통계 최초 로드(헤더 버튼용)
+  useEffect(() => {
+    setStats(loadStats());
+  }, []);
+
+  // 게임 완료(정답/포기) 시 누적 통계 집계. 같은 날짜는 recordResult가 1회만 반영.
+  useEffect(() => {
+    if (!won || !today) return;
+    const solved = rows.some((r) => r.win);
+    setStats(recordResult(today.date, solved, rows.length));
+  }, [won, today]);
+
   // 다음 초기화까지 1초마다 카운트다운 갱신
   useEffect(() => {
     const tick = () => setCountdown(formatCountdown(msUntilNextReset()));
@@ -155,6 +209,32 @@ export default function Page() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  // 하루 경계(오전 9시) 자동 전환: 탭을 열어둔 채 날짜가 넘어가면 서버에서 새 판을
+  // 받아 자동 리셋. 클라 시계로 후보를 감지하되, 서버 date가 실제로 바뀐 경우에만 적용.
+  useEffect(() => {
+    if (!today) return;
+    let cooldownUntil = 0;
+    const id = setInterval(async () => {
+      if (rollingRef.current || Date.now() < cooldownUntil) return;
+      if (clientPuzzleDate() === today.date) return; // 아직 같은 날
+      rollingRef.current = true;
+      try {
+        const info = await fetchToday();
+        if (info.date !== today.date) {
+          applyDay(info); // 실제로 새 날짜일 때만 판 리셋
+        } else {
+          // 서버가 아직 안 넘어감(클라 시계 앞섬) → 30초 뒤 재확인, 재조회 폭주 방지
+          cooldownUntil = Date.now() + 30_000;
+        }
+      } catch {
+        cooldownUntil = Date.now() + 30_000;
+      } finally {
+        rollingRef.current = false;
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [today, applyDay]);
 
   const guessedIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
 
@@ -230,7 +310,7 @@ export default function Page() {
 
   async function shareResult() {
     if (!today) return;
-    const text = buildShareText(rows, hints.length);
+    const text = buildShareText(rows, hints.length, stats?.curStreak ?? 0);
     try {
       await navigator.clipboard.writeText(text);
       setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
@@ -304,6 +384,14 @@ export default function Page() {
   return (
     <div className="wrap">
       <header className="top">
+        <button
+          className="stats-open"
+          onClick={() => setShowStats(true)}
+          aria-label="통계 보기"
+          title="통계"
+        >
+          📊
+        </button>
         <h1>보맨틀 🎲</h1>
         <div className="sub">
           {today
@@ -348,9 +436,14 @@ export default function Page() {
               <span className="answer-link-text">보드라이프에서 보기 ↗</span>
             </a>
           )}
-          <button className="share-btn" onClick={shareResult}>
-            📋 결과 공유
-          </button>
+          <div className="banner-actions">
+            <button className="share-btn" onClick={shareResult}>
+              📋 결과 공유
+            </button>
+            <button className="stats-btn" onClick={() => setShowStats(true)}>
+              📊 통계
+            </button>
+          </div>
           {shareMsg && <div className="share-msg">{shareMsg}</div>}
         </div>
       )}
@@ -460,6 +553,76 @@ export default function Page() {
         </a>
         <span className="credit">제작자: 문보미</span>
       </footer>
+
+      {showStats && stats && (
+        <div className="modal-backdrop" onClick={() => setShowStats(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>📊 통계</h2>
+              <button
+                className="modal-close"
+                onClick={() => setShowStats(false)}
+                aria-label="닫기"
+              >
+                ✕
+              </button>
+            </div>
+
+            {stats.played === 0 ? (
+              <div className="stats-empty">
+                아직 완료한 게임이 없어요.
+                <span>오늘의 문제를 맞히면 여기에 기록돼요!</span>
+              </div>
+            ) : (
+              <>
+                <div className="stat-grid">
+                  <div className="stat-cell">
+                    <div className="stat-num">{stats.played}</div>
+                    <div className="stat-lbl">플레이</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">{winRate(stats)}%</div>
+                    <div className="stat-lbl">정답률</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">{stats.curStreak}</div>
+                    <div className="stat-lbl">현재 연속</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">{stats.maxStreak}</div>
+                    <div className="stat-lbl">최고 연속</div>
+                  </div>
+                </div>
+
+                <div className="dist">
+                  <div className="dist-title">추측 횟수 분포</div>
+                  {(() => {
+                    const max = Math.max(1, ...GUESS_BUCKETS.map((b) => stats.dist[b] ?? 0));
+                    const hi =
+                      won && rows.some((r) => r.win) ? bucketOf(rows.length) : null;
+                    return GUESS_BUCKETS.map((b) => {
+                      const c = stats.dist[b] ?? 0;
+                      return (
+                        <div className="dist-row" key={b}>
+                          <span className="dist-lbl">{b}</span>
+                          <div className="dist-bar">
+                            <span
+                              className={`dist-fill ${b === hi ? "hi" : ""}`}
+                              style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
+                            >
+                              {c > 0 && <em>{c}</em>}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
