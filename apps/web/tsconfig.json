@@ -29,7 +29,9 @@
     "**/*.tsx",
     ".next/types/**/*.ts"
   ],
+  // 테스트는 node:test로 실행(.ts 확장자 import) — 앱 타입셋과 분리. 검증은 `node --test`가 담당.
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.test.ts"
   ]
 }

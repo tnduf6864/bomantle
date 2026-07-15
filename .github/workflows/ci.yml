@@ -28,6 +28,10 @@ jobs:
       - name: Test core & api
         run: pnpm --filter @bomantle/core --filter @bomantle/api test
 
+      # web: 통계 등 순수 로직 유닛테스트
+      - name: Test web
+        run: pnpm --filter @bomantle/web test
+
       # web: next build가 타입검증까지 수행(next-env가 .next/types 참조 → 빌드 후 검증)
       - name: Build web
         run: pnpm --filter @bomantle/web build
