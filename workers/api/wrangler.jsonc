@@ -18,6 +18,23 @@
 			"remote": true
 		}
 	],
+	// 날짜별 접속자 카운터 DO. 무료 플랜은 SQLite 클래스만 지원(new_sqlite_classes).
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "VISITS",
+				"class_name": "VisitCounter"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"VisitCounter"
+			]
+		}
+	],
 	"vars": {
 		"TIMEZONE": "Asia/Seoul"
 	}

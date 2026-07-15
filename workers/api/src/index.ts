@@ -16,6 +16,10 @@ import {
   dailyAnswerFromSeed,
 } from "./answer.ts";
 import { buildHint, type FullGame } from "./hint.ts";
+import { VisitCounter } from "./visits.ts";
+
+// DO 클래스는 엔트리에서 export 되어야 wrangler가 바인딩할 수 있다.
+export { VisitCounter };
 
 const games = gamesData as unknown as FullGame[];
 const categories = catData as Record<string, string>;
@@ -29,6 +33,7 @@ const boxartSet = new Set<number>(boxartIds as number[]);
 
 interface Env {
   ANSWERS?: KVNamespace;
+  VISITS?: DurableObjectNamespace<VisitCounter>;
 }
 
 interface DayState {
@@ -64,6 +69,16 @@ async function getDayState(env: Env, date: string): Promise<DayState> {
     rankCache.set(answerId, rc);
   }
   return { date, answerId, ranking: rc.ranking, pos: rc.pos };
+}
+
+// 오늘 접속자 수. 바인딩 없음(로컬 등)·DO 오류 시 null — 게임 진행에는 영향 없음.
+async function visitorCount(env: Env, date: string): Promise<number | null> {
+  if (!env.VISITS) return null;
+  try {
+    return await env.VISITS.get(env.VISITS.idFromName(date)).current();
+  } catch {
+    return null;
+  }
 }
 
 // 허용 origin 화이트리스트. 운영 Pages + 로컬 개발.
@@ -119,9 +134,21 @@ export default {
           puzzleNumber: puzzleNumber(date),
           totalGames: games.length,
           poolSize: pool.length,
+          visitors: await visitorCount(env, date),
         },
         req,
       );
+    }
+
+    // POST /api/visit — 오늘 접속자 +1 (클라이언트가 하루 1회만 호출)
+    if (url.pathname === "/api/visit" && req.method === "POST") {
+      if (!env.VISITS) return json({ visitors: null }, req);
+      try {
+        const n = await env.VISITS.get(env.VISITS.idFromName(date)).increment();
+        return json({ visitors: n }, req);
+      } catch {
+        return json({ visitors: null }, req);
+      }
     }
 
     // POST /api/guess { gameId } — 점수/순위 (정답 비노출)

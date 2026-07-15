@@ -3,12 +3,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GameMeta, GuessRow, HintData, TodayInfo } from "../lib/types";
 import { loadGameDB, resolve, suggest, categoryNames, type GameDB } from "../lib/games";
-import { fetchToday, fetchGuess, fetchGiveup, fetchHint } from "../lib/api";
+import { fetchToday, fetchGuess, fetchGiveup, fetchHint, fetchVisit } from "../lib/api";
 import {
   loadStats,
   recordResult,
   winRate,
   bucketOf,
+  giveups,
+  avgGuesses,
+  effectiveStreak,
+  effectiveNoHintStreak,
+  exportStats,
+  importStats,
   GUESS_BUCKETS,
   type Stats,
 } from "../lib/stats";
@@ -113,8 +119,12 @@ export default function Page() {
   const [hints, setHints] = useState<HintData[]>([]);
   const [hintLoading, setHintLoading] = useState(false);
   const [countdown, setCountdown] = useState("");
+  const [visitors, setVisitors] = useState<number | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
+  const [backupText, setBackupText] = useState("");
+  const [backupMsg, setBackupMsg] = useState("");
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   // 응답 대기 중인 gameId. 같은 게임 연속 제출(race) 중복 추가 방지.
@@ -126,6 +136,7 @@ export default function Page() {
   // 최초 로드와 하루 경계(오전 9시) 자동 전환에서 공용.
   const applyDay = useCallback((info: TodayInfo) => {
     setToday(info);
+    setVisitors(info.visitors ?? null);
     // 이전 판 상태 초기화
     setRows([]);
     setWon(false);
@@ -190,6 +201,24 @@ export default function Page() {
     );
   }, [rows, won, answer, answerInfo, hints, today]);
 
+  // 오늘 첫 방문이면 접속 집계 핑 1회. localStorage 플래그로 같은 날짜 중복 집계 방지.
+  // 플래그를 먼저 심으므로 핑이 실패하면 그날은 집계에서 빠짐(중복 집계보다 낫다).
+  useEffect(() => {
+    if (!today) return;
+    const key = `bomantle:visited:${today.date}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {
+      return; // 저장 불가 환경은 dedupe가 안 되므로 집계 생략
+    }
+    fetchVisit()
+      .then((r) => {
+        if (r.visitors != null) setVisitors(r.visitors);
+      })
+      .catch(() => {});
+  }, [today]);
+
   // 통계 최초 로드(헤더 버튼용)
   useEffect(() => {
     setStats(loadStats());
@@ -199,7 +228,7 @@ export default function Page() {
   useEffect(() => {
     if (!won || !today) return;
     const solved = rows.some((r) => r.win);
-    setStats(recordResult(today.date, solved, rows.length));
+    setStats(recordResult(today.date, solved, rows.length, hints.length));
   }, [won, today]);
 
   // 다음 초기화까지 1초마다 카운트다운 갱신
@@ -398,6 +427,9 @@ export default function Page() {
             ? `${today.date} · 매일 보드게임 하나를 유사도로 맞혀보세요`
             : "불러오는 중…"}
         </div>
+        {visitors != null && visitors > 0 && (
+          <div className="visitors">👥 오늘 {visitors.toLocaleString()}명 접속</div>
+        )}
         {countdown && (
           <div className="reset-info">
             ⏰ 다음 문제까지 <b>{countdown}</b>
@@ -585,7 +617,7 @@ export default function Page() {
                     <div className="stat-lbl">정답률</div>
                   </div>
                   <div className="stat-cell">
-                    <div className="stat-num">{stats.curStreak}</div>
+                    <div className="stat-num">{effectiveStreak(stats, today?.date ?? "")}</div>
                     <div className="stat-lbl">현재 연속</div>
                   </div>
                   <div className="stat-cell">
@@ -594,8 +626,34 @@ export default function Page() {
                   </div>
                 </div>
 
+                <div className="stat-grid stat-grid-2">
+                  <div className="stat-cell">
+                    <div className="stat-num">{avgGuesses(stats) || "–"}</div>
+                    <div className="stat-lbl">평균 추측</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">{stats.bestGuesses ?? "–"}</div>
+                    <div className="stat-lbl">베스트</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">{stats.noHintWins}</div>
+                    <div className="stat-lbl">무힌트 승</div>
+                  </div>
+                  <div className="stat-cell">
+                    <div className="stat-num">
+                      {effectiveNoHintStreak(stats, today?.date ?? "")}
+                    </div>
+                    <div className="stat-lbl">무힌트 연속</div>
+                  </div>
+                </div>
+
                 <div className="dist">
-                  <div className="dist-title">추측 횟수 분포</div>
+                  <div className="dist-title">
+                    추측 횟수 분포
+                    {giveups(stats) > 0 && (
+                      <span className="dist-note"> · 포기 {giveups(stats)}회</span>
+                    )}
+                  </div>
                   {(() => {
                     const max = Math.max(1, ...GUESS_BUCKETS.map((b) => stats.dist[b] ?? 0));
                     const hi =
@@ -620,6 +678,65 @@ export default function Page() {
                 </div>
               </>
             )}
+
+            <div className="backup">
+              <button
+                className="backup-toggle"
+                onClick={() => {
+                  setShowBackup((v) => !v);
+                  setBackupMsg("");
+                }}
+              >
+                {showBackup ? "▲ 백업 닫기" : "⤓ 기기 이동·백업"}
+              </button>
+              {showBackup && (
+                <div className="backup-panel">
+                  <p className="backup-hint">
+                    통계는 이 브라우저에만 저장돼요. 아래 코드를 복사해 두거나, 다른 기기에서
+                    붙여넣어 복원하세요.
+                  </p>
+                  <textarea
+                    className="backup-text"
+                    value={backupText}
+                    onChange={(e) => setBackupText(e.target.value)}
+                    placeholder="백업 코드를 붙여넣으세요…"
+                    spellCheck={false}
+                  />
+                  <div className="backup-actions">
+                    <button
+                      onClick={() => {
+                        const json = exportStats(stats);
+                        setBackupText(json);
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(json).then(
+                            () => setBackupMsg("복사됐어요 ✓"),
+                            () => setBackupMsg("아래 코드를 직접 복사하세요"),
+                          );
+                        } else {
+                          setBackupMsg("아래 코드를 직접 복사하세요");
+                        }
+                      }}
+                    >
+                      내보내기(복사)
+                    </button>
+                    <button
+                      onClick={() => {
+                        const next = importStats(backupText.trim());
+                        if (next) {
+                          setStats(next);
+                          setBackupMsg("복원 완료! ✓");
+                        } else {
+                          setBackupMsg("잘못된 백업 코드예요");
+                        }
+                      }}
+                    >
+                      불러오기
+                    </button>
+                    {backupMsg && <span className="backup-msg">{backupMsg}</span>}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

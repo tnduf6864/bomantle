@@ -27,6 +27,8 @@ export interface TodayInfo {
   puzzleNumber: number;
   totalGames: number;
   poolSize: number;
+  /** 오늘 접속자 수. 집계 불가(구버전 서버·DO 오류)면 null/없음 */
+  visitors?: number | null;
 }
 
 export interface HintData {

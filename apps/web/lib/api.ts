@@ -24,6 +24,13 @@ export async function fetchHint(level: number): Promise<HintData> {
   return r.json();
 }
 
+// 접속 집계 핑(+1). 하루 1회만 호출할 것 — dedupe는 호출부(localStorage) 책임.
+export async function fetchVisit(): Promise<{ visitors: number | null }> {
+  const r = await fetch(`${BASE}/api/visit`, { method: "POST" });
+  if (!r.ok) throw new Error("visit failed");
+  return r.json();
+}
+
 export async function fetchGiveup(): Promise<{
   answer: { id: number; name_ko: string | null; name_en: string | null; image?: string | null };
 }> {

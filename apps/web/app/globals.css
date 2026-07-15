@@ -57,6 +57,11 @@ header.top .sub {
   color: var(--muted);
   font-size: 13px;
 }
+header.top .visitors {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .reset-info {
   display: inline-flex;
   align-items: center;
@@ -330,7 +335,15 @@ header.top .sub {
 }
 .stat-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
+.stat-grid-2 {
+  margin-top: -6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.stat-grid-2 .stat-num { font-size: 20px; }
+
 .dist-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.dist-note { color: var(--muted); font-weight: 400; }
 .dist-row {
   display: grid;
   grid-template-columns: 40px 1fr;
@@ -364,6 +377,64 @@ header.top .sub {
   color: #fff;
   font-variant-numeric: tabular-nums;
 }
+
+.backup {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.backup-toggle {
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.backup-toggle:hover { background: var(--panel-2); color: var(--text); }
+.backup-panel { margin-top: 10px; }
+.backup-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.backup-text {
+  width: 100%;
+  height: 64px;
+  resize: vertical;
+  padding: 8px;
+  font-size: 11px;
+  font-family: ui-monospace, monospace;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.backup-text:focus { border-color: var(--accent); outline: none; }
+.backup-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.backup-actions button {
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.backup-actions button:hover { border-color: var(--accent); }
+.backup-msg { font-size: 12px; color: var(--cool); font-weight: 600; }
 
 .row {
   display: grid;
