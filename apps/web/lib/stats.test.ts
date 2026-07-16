@@ -28,14 +28,38 @@ const {
 
 beforeEach(() => store.clear());
 
-test("bucketOf: 1~6은 개별, 이후 구간 버킷", () => {
-  assert.equal(bucketOf(1), "1");
-  assert.equal(bucketOf(6), "6");
+test("bucketOf: 넓은 구간 버킷", () => {
+  assert.equal(bucketOf(1), "1-3");
+  assert.equal(bucketOf(3), "1-3");
+  assert.equal(bucketOf(4), "4-6");
+  assert.equal(bucketOf(6), "4-6");
   assert.equal(bucketOf(7), "7-10");
   assert.equal(bucketOf(10), "7-10");
   assert.equal(bucketOf(11), "11-20");
-  assert.equal(bucketOf(21), "21+");
-  assert.equal(bucketOf(999), "21+");
+  assert.equal(bucketOf(20), "11-20");
+  assert.equal(bucketOf(21), "21-30");
+  assert.equal(bucketOf(30), "21-30");
+  assert.equal(bucketOf(31), "31-50");
+  assert.equal(bucketOf(50), "31-50");
+  assert.equal(bucketOf(51), "51+");
+  assert.equal(bucketOf(999), "51+");
+});
+
+test("v2 저장 데이터의 옛 버킷은 로드 시 새 구간으로 합산", () => {
+  // 옛 형식: 1..6 개별 키, "21+" 존재
+  store.set(
+    "bomantle:stats",
+    JSON.stringify({
+      version: 2,
+      played: 6,
+      wins: 6,
+      dist: { "1": 1, "3": 2, "5": 1, "7-10": 1, "21+": 1 },
+      recorded: {},
+    }),
+  );
+  const s = loadStats();
+  assert.equal(s.version, 3);
+  assert.deepEqual(s.dist, { "1-3": 3, "4-6": 1, "7-10": 1, "21-30": 1 });
 });
 
 test("recordResult: 같은 날짜는 1회만 반영(멱등)", () => {

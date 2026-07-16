@@ -5,17 +5,37 @@ const KEY = "bomantle:stats";
 
 /** 추측 횟수 분포 버킷(작을수록 좋음). 표시 순서 고정. */
 export const GUESS_BUCKETS = [
-  "1",
-  "2",
-  "3",
-  "4",
-  "5",
-  "6",
+  "1-3",
+  "4-6",
   "7-10",
   "11-20",
-  "21+",
+  "21-30",
+  "31-50",
+  "51+",
 ] as const;
 export type GuessBucket = (typeof GUESS_BUCKETS)[number];
+
+// v2까지 쓰던 세분 버킷(1..6 개별, 21+) → 넓은 구간으로 합치는 매핑.
+// 옛 "21+"는 세부를 알 수 없으므로 가장 보수적인 "21-30"에 합산한다.
+const LEGACY_BUCKET_MAP: Record<string, GuessBucket> = {
+  "1": "1-3",
+  "2": "1-3",
+  "3": "1-3",
+  "4": "4-6",
+  "5": "4-6",
+  "6": "4-6",
+  "21+": "21-30",
+};
+
+/** 저장된 분포의 옛 버킷 키를 현재 버킷으로 합산. 이미 새 형식이면 그대로(멱등). */
+function migrateDist(dist: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(dist)) {
+    const nk = LEGACY_BUCKET_MAP[k] ?? k;
+    out[nk] = (out[nk] ?? 0) + v;
+  }
+  return out;
+}
 
 export interface Stats {
   version: number;
@@ -53,7 +73,7 @@ export interface Stats {
 
 function empty(): Stats {
   return {
-    version: 2,
+    version: 3,
     played: 0,
     wins: 0,
     curStreak: 0,
@@ -76,7 +96,10 @@ export function loadStats(): Stats {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return empty();
-    return { ...empty(), ...(JSON.parse(raw) as Partial<Stats>) };
+    const s = { ...empty(), ...(JSON.parse(raw) as Partial<Stats>) };
+    s.dist = migrateDist(s.dist);
+    s.version = 3;
+    return s;
   } catch {
     return empty();
   }
@@ -90,10 +113,13 @@ function save(s: Stats): void {
 
 /** 추측 횟수 -> 분포 버킷 라벨. */
 export function bucketOf(n: number): GuessBucket {
-  if (n <= 6) return String(n) as GuessBucket;
+  if (n <= 3) return "1-3";
+  if (n <= 6) return "4-6";
   if (n <= 10) return "7-10";
   if (n <= 20) return "11-20";
-  return "21+";
+  if (n <= 30) return "21-30";
+  if (n <= 50) return "31-50";
+  return "51+";
 }
 
 /** date2가 date1 바로 다음 퍼즐 날짜(하루 뒤)인가. YYYY-MM-DD 기준. */
@@ -207,7 +233,8 @@ export function importStats(json: string): Stats | null {
     ) {
       return null;
     }
-    const merged = { ...empty(), ...parsed, version: 2 };
+    const merged = { ...empty(), ...parsed, version: 3 };
+    merged.dist = migrateDist(merged.dist);
     save(merged);
     return merged;
   } catch {

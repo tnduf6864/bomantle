@@ -37,8 +37,9 @@ function rankLabel(rank: number): string {
 }
 
 // 추측 횟수 → 별점 (적게 맞힐수록 ★ 많음).
+// 실제 플레이가 수십 회까지 퍼지므로 경계를 넓게 잡아 별 개수가 고르게 나오도록 함.
 function starRating(n: number): string {
-  const filled = n <= 3 ? 5 : n <= 6 ? 4 : n <= 10 ? 3 : n <= 20 ? 2 : 1;
+  const filled = n <= 4 ? 5 : n <= 9 ? 4 : n <= 16 ? 3 : n <= 30 ? 2 : 1;
   return "★".repeat(filled) + "☆".repeat(5 - filled);
 }
 
