@@ -62,6 +62,10 @@
 
 ## 6. 전체 익명 집계 통계 (백엔드 신규)
 
+> ⚠️ **[docs/rank-percentile-plan.md](./docs/rank-percentile-plan.md)(정답 백분위 기능)와 통합 예정.**
+> 그쪽이 같은 `POST /api/result`를 쓰고 저장소(DO SQLite)·분포 집계를 공유한다.
+> 착수 전에 그 문서의 "TODO 6번과의 관계" 절을 먼저 읽을 것.
+
 개인 통계(5번, localStorage)와 별개로 "오늘의 전체 현황"을 보여주는 기능.
 정답명·개인 식별자 없이 **익명 카운트만** 수집·집계한다.
 
