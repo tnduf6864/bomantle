@@ -4,6 +4,7 @@ import {
   GUESS_BUCKETS,
   MAX_GUESSES,
   MAX_HINTS,
+  avgGuessesOf,
   buildDistribution,
   guessBucket,
   percentileOf,
@@ -29,10 +30,17 @@ test("경계값(힌트 0·8, 추측 1·500)은 허용", () => {
 test("범위 밖 입력은 보정하지 않고 거부한다", () => {
   assert.equal(sanitizeSubmission({ cid: CID, hints: -1, guesses: 5 }), null);
   assert.equal(sanitizeSubmission({ cid: CID, hints: MAX_HINTS + 1, guesses: 5 }), null);
-  assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: 0 }), null);
   assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: MAX_GUESSES + 1 }), null);
   assert.equal(sanitizeSubmission({ cid: CID, hints: 1.5, guesses: 5 }), null);
   assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: Number.NaN }), null);
+  assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: -1, solved: false }), null);
+});
+
+// 첫 추측 전에 포기하는 사람이 참여 집계(분모)에서 빠지면 정답률이 부풀려진다.
+test("추측 0번은 포기만 허용하고 정답은 거부한다", () => {
+  assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: 0, solved: false })?.guesses, 0);
+  assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: 0 }), null); // solved 기본 true
+  assert.equal(sanitizeSubmission({ cid: CID, hints: 0, guesses: 0, solved: true }), null);
 });
 
 test("문자열 숫자·누락 필드·잘못된 cid는 거부한다", () => {
@@ -125,6 +133,23 @@ test("추측 분포는 버킷으로 접히고 모든 버킷 키가 존재한다"
   assert.equal(guessDist["1-3"], 2); // 2와 3이 같은 버킷
   assert.equal(guessDist["51+"], 1);
   assert.equal(guessDist["4-6"], 0);
+});
+
+// --- avgGuessesOf --------------------------------------------------------
+
+test("평균 추측은 소수 1자리로 반올림", () => {
+  const rows: ResultRow[] = [
+    { hints: 0, guesses: 10, ts: 1 },
+    { hints: 0, guesses: 11, ts: 2 },
+    { hints: 0, guesses: 15, ts: 3 },
+  ];
+  assert.equal(avgGuessesOf(rows), 12); // 36/3
+  assert.equal(avgGuessesOf([...rows, { hints: 0, guesses: 12, ts: 4 }]), 12); // 48/4
+  assert.equal(avgGuessesOf([{ hints: 0, guesses: 1, ts: 1 }, { hints: 0, guesses: 2, ts: 2 }]), 1.5);
+});
+
+test("표본 0이면 평균 0", () => {
+  assert.equal(avgGuessesOf([]), 0);
 });
 
 // --- rankAmong (타이브레이크 규칙) ---------------------------------------

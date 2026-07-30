@@ -63,14 +63,13 @@
 - [ ] 추측 리스트 가장 가까운 항목 상단 고정 표시 강화
 - [ ] 빈 상태/로딩/에러 카피 다듬기
 
-## 6. 전체 익명 집계 통계 (백엔드) — 기반 완료, 나머지만 남음
+## 6. 전체 익명 집계 통계 ✅ 완료 (2026-07-30)
 
 > ✅ **저장소·수집 경로는 [docs/rank-percentile-plan.md](./docs/rank-percentile-plan.md)(정답 백분위)
-> 구현으로 대체됨.** 이 항목의 원래 설계(D1 + `GET /api/stats`)는 폐기하고
-> `ResultBoard` DO(SQLite, 날짜별 인스턴스) + `POST /api/result`를 재사용한다.
-> 착수 전 그 문서의 "TODO 6번과의 관계" 절을 읽을 것.
+> 구현으로 대체됨.** 원래 설계였던 D1은 폐기하고 `ResultBoard` DO(SQLite, 날짜별 인스턴스) +
+> `POST /api/result`를 재사용한다. 배경은 그 문서의 "TODO 6번과의 관계" 절 참고.
 
-이미 되어 있는 것:
+구성:
 
 - [x] 저장소 — `workers/api/src/results.ts` `ResultBoard`(DO SQLite). D1보다 나음:
       날짜별 인스턴스로 자연 샤딩 + 단일 스레드라 쓰기 경쟁 없음
@@ -78,17 +77,20 @@
       어뷰즈 방지는 `INSERT OR IGNORE`(cid당 첫 기록만) — 반복 제출해도 이득 없음
 - [x] 분포 집계 — 힌트 개수별 + 추측 버킷별(웹 `lib/stats.ts` 버킷 라벨과 동일)
 - [x] 개인정보 원칙 — 정답명·식별 가능 정보 미수집. cid는 클라가 만든 임의 UUID
-- [x] 읽기 전용 `snapshot()`(쓰기 없이 표본 수 + 분포) — DO에 이미 있음, 라우트만 없다
+- [x] 포기도 제출 — 완료 시 `solved` 플래그와 함께 POST. 순위 표본에는 안 들어가고
+      참여 수·정답률 분모에만 반영된다
+- [x] **추측 0번 포기 허용** — `sanitizeSubmission`이 `solved=false`일 때만 `guesses: 0`을
+      받는다. 안 그러면 첫 추측 전에 포기한 사람이 분모에서 통째로 빠져 정답률이 부풀려진다
+- [x] 조회 라우트 `GET /api/stats` → `snapshot()`. 쓰기 없음, `Cache-Control: max-age=60`
+- [x] `snapshot()`이 `{ players, solved, avgGuesses, hintDist, guessDist }` 반환.
+      정답률은 클라에서 `solved / players`로 파생(서버는 원시 카운트만)
+- [x] 웹: 통계 모달에 "오늘의 전체 현황" 카드(`.dist-*` 재사용) +
+      **포기 배너에 "오늘 N명 중 M명이 맞혔어요"** — 포기자는 백분위를 볼 수 없어 생긴 공백을 메움
+- [x] 유닛테스트 — `avgGuessesOf`, 추측 0번 포기/정답 구분 (워커 전체 46건)
 
-남은 것:
-
-- [ ] 포기도 제출 — 클라가 포기 시 `solved: false`로 POST(서버·스키마는 이미 지원).
-      그래야 정답률 분모가 생긴다
-- [ ] 조회 라우트 `GET /api/stats` → `snapshot()` 노출(엣지 캐시 검토).
-      또는 `/api/today` 응답에 표본 수만 얹는 방식도 가능
-- [ ] 웹: 통계 모달에 "오늘의 전체 현황" 카드 추가(개인 통계 위/아래).
-      분포 UI는 `.dist-*` 클래스 재사용 — 백분위 카드가 이미 같은 방식으로 쓴다
-- [ ] 평균 추측·정답률 필드는 `snapshot()`에 추가 계산 필요(현재는 표본 수 + 분포만)
+> ⚠️ 개발 시 주의: `next dev`는 청크 URL이 고정이라 `sw.js`의 cache-first에 걸려 **코드를
+> 고쳐도 브라우저가 옛 번들을 계속 쓴다.** 로컬 테스트가 이상하면 SW 해제 후 새로고침할 것.
+> 프로덕션은 `_next` 해시 URL이라 배포하면 자동으로 새로 받는다(내비게이션도 network-first).
 
 ## 7. 검색 노출(SEO)
 

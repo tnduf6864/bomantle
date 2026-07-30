@@ -584,6 +584,22 @@ header.top .visitors {
   border-top: 1px solid var(--border);
 }
 .stat-grid-2 .stat-num { font-size: 20px; }
+.stat-grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* 통계 모달의 "오늘의 전체 현황"(서버 익명 집계). 개인 통계와 시각적으로 구분한다. */
+.today-stats {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.today-stats .stat-num { font-size: 20px; }
+.today-stats .dist { margin-top: 14px; }
+.today-empty {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px 0 4px;
+}
 
 .dist-title { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
 .dist-note { color: var(--muted); font-weight: 400; }

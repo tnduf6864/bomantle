@@ -56,6 +56,9 @@ const rankCache = new Map<number, { ranking: ScoredGame[]; pos: Map<number, numb
 // 같은 날짜 키(answer:DATE)를 엣지에 캐시해 KV 읽기 횟수를 대폭 줄임.
 const KV_CACHE_TTL = 300;
 
+// 오늘 전체 현황(/api/stats) 캐시. 값이 하루 내내 늘어나므로 짧게 잡는다.
+const STATS_CACHE_TTL = 60;
+
 async function getDayState(env: Env, date: string): Promise<DayState> {
   // KV 오버라이드 우선, 없으면 시드 결정론
   let answerId: number | undefined;
@@ -229,6 +232,22 @@ export default {
       try {
         const board = env.RESULTS.get(env.RESULTS.idFromName(date));
         return json(await board.submit(sub), req);
+      } catch {
+        return json({ available: false }, req);
+      }
+    }
+
+    // GET /api/stats — 오늘 전체 현황(익명 집계). 쓰기 없음.
+    // 정답명·개인 식별 정보는 담지 않는다 — 순수 카운트만.
+    if (url.pathname === "/api/stats" && req.method === "GET") {
+      if (!env.RESULTS) return json({ available: false }, req);
+      try {
+        const board = env.RESULTS.get(env.RESULTS.idFromName(date));
+        return json(await board.snapshot(), req, 200, {
+          // 하루 내내 값이 늘어나므로 짧게만 캐시한다. 브라우저 재조회(모달 재오픈)에서
+          // DO 호출을 아끼는 게 주 목적.
+          "Cache-Control": `public, max-age=${STATS_CACHE_TTL}`,
+        });
       } catch {
         return json({ available: false }, req);
       }

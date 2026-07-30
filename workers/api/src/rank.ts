@@ -66,16 +66,14 @@ export function sanitizeSubmission(body: unknown): Submission | null {
 
   if (typeof b.cid !== "string" || !CID_RE.test(b.cid)) return null;
   if (!isIntInRange(b.hints, 0, MAX_HINTS)) return null;
-  if (!isIntInRange(b.guesses, 1, MAX_GUESSES)) return null;
-  // solved 생략은 정답(true)으로 본다 — 현재 클라는 맞혔을 때만 제출한다.
+  // solved 생략은 정답(true)으로 본다.
   if (b.solved !== undefined && typeof b.solved !== "boolean") return null;
+  const solved = (b.solved ?? true) as boolean;
+  // 추측 0번으로 맞힐 수는 없지만, 첫 추측 전에 바로 포기할 수는 있다.
+  // 포기에 0을 허용하지 않으면 그 사람들이 참여 집계(분모)에서 통째로 빠진다.
+  if (!isIntInRange(b.guesses, solved ? 1 : 0, MAX_GUESSES)) return null;
 
-  return {
-    cid: b.cid,
-    hints: b.hints,
-    guesses: b.guesses,
-    solved: b.solved ?? true,
-  };
+  return { cid: b.cid, hints: b.hints, guesses: b.guesses, solved };
 }
 
 function isIntInRange(v: unknown, min: number, max: number): v is number {
@@ -121,6 +119,16 @@ export function guessBucket(n: number): GuessBucket {
   if (n <= 30) return "21-30";
   if (n <= 50) return "31-50";
   return "51+";
+}
+
+/**
+ * 정답자 평균 추측 횟수(소수 1자리). 웹 `lib/stats.ts`의 avgGuesses와 같은 표현.
+ * 표본이 없으면 0.
+ */
+export function avgGuessesOf(rows: ResultRow[]): number {
+  if (rows.length === 0) return 0;
+  const sum = rows.reduce((a, r) => a + r.guesses, 0);
+  return Math.round((sum / rows.length) * 10) / 10;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 import {
   MIN_SAMPLE,
+  avgGuessesOf,
   buildDistribution,
   percentileOf,
   rankAmong,
@@ -16,6 +17,22 @@ import {
 
 /** 기록 보존 기간. 지나면 alarm이 인스턴스 데이터를 비운다(무한 누적 방지). */
 const RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * 오늘 전체 현황(익명 집계). `RankResult`와 달리 **포기까지 포함**한 참여 수를 담는다.
+ * 정답률은 `solved / players`로 클라에서 파생한다(서버는 원시 카운트만 내려준다).
+ */
+export interface BoardSnapshot {
+  /** 결과를 제출한 사람 수(정답 + 포기) */
+  players: number;
+  /** 그중 맞힌 사람 수 */
+  solved: number;
+  /** 정답자 평균 추측 횟수(소수 1자리) */
+  avgGuesses: number;
+  /** 아래 분포는 모두 **정답자 기준** */
+  hintDist: number[];
+  guessDist: Record<string, number>;
+}
 
 /** 백분위 응답. total은 **맞힌 사람 수**(포기자는 분모에 없다). */
 export interface RankResult {
@@ -110,10 +127,24 @@ export class ResultBoard extends DurableObject<unknown> {
     };
   }
 
-  /** 쓰기 없이 오늘 표본 수 + 분포만. 포기자 화면·전체 현황 집계용. */
-  async snapshot(): Promise<{ total: number } & Distribution> {
+  /** 쓰기 없이 오늘 전체 현황만. 포기자 화면·통계 모달용. */
+  async snapshot(): Promise<BoardSnapshot> {
     const rows = this.#solvedRows();
-    return { total: rows.length, ...this.#dist(rows) };
+    return {
+      players: this.#playerCount(),
+      solved: rows.length,
+      avgGuesses: avgGuessesOf(rows),
+      ...this.#dist(rows),
+    };
+  }
+
+  /** 제출자 총원(정답 + 포기). 행 전체를 읽지 않도록 COUNT로만 센다. */
+  #playerCount(): number {
+    return (
+      this.ctx.storage.sql
+        .exec<{ n: number }>(`SELECT COUNT(*) AS n FROM results`)
+        .toArray()[0]?.n ?? 0
+    );
   }
 
   /**

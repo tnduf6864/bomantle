@@ -89,6 +89,22 @@ export interface PercentileResult {
   pending?: boolean;
 }
 
+/**
+ * GET /api/stats 응답 — 오늘 전체 현황(익명 집계).
+ * `PercentileResult`와 달리 **포기까지 포함**한 참여 수를 담는다. 정답률은 클라에서 파생.
+ */
+export interface TodayStats {
+  /** 결과를 제출한 사람 수(정답 + 포기) */
+  players: number;
+  /** 그중 맞힌 사람 수 */
+  solved: number;
+  /** 정답자 평균 추측 횟수(소수 1자리) */
+  avgGuesses: number;
+  /** 아래 분포는 모두 정답자 기준 */
+  hintDist: number[];
+  guessDist: Record<string, number>;
+}
+
 export interface HintData {
   level: number;
   label: string;

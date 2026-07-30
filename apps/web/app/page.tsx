@@ -9,6 +9,7 @@ import type {
   PercentileResult,
   RankingItem,
   TodayInfo,
+  TodayStats,
 } from "../lib/types";
 import { loadGameDB, resolve, suggest, categoryNames, type GameDB } from "../lib/games";
 import {
@@ -18,6 +19,7 @@ import {
   fetchHint,
   fetchRanking,
   fetchResult,
+  fetchStats,
   fetchVisit,
 } from "../lib/api";
 import {
@@ -289,6 +291,73 @@ function PercentileCard({ info }: { info: PercentileResult }) {
   );
 }
 
+/** 오늘 참여자 중 맞힌 비율(%). 참여 0이면 0. */
+function todayWinRate(s: TodayStats): number {
+  return s.players ? Math.round((s.solved / s.players) * 100) : 0;
+}
+
+/**
+ * 오늘의 전체 현황(익명 집계). 개인 통계(localStorage)와 달리 서버 집계이고,
+ * **분모에 포기까지 포함**한다 — 분포 막대는 정답자 기준이므로 라벨로 구분해 둔다.
+ */
+function TodayStatsCard({ info, myBucket }: { info: TodayStats; myBucket: string | null }) {
+  const max = Math.max(1, ...GUESS_BUCKETS.map((b) => info.guessDist[b] ?? 0));
+  return (
+    <div className="today-stats">
+      <div className="dist-title">
+        🌏 오늘의 전체 현황
+        <span className="dist-note"> · 익명 집계</span>
+      </div>
+
+      {info.players === 0 ? (
+        <div className="today-empty">아직 오늘 결과를 낸 사람이 없어요. 첫 번째가 되어보세요!</div>
+      ) : (
+        <>
+          <div className="stat-grid stat-grid-3">
+            <div className="stat-cell">
+              <div className="stat-num">{info.players.toLocaleString()}</div>
+              <div className="stat-lbl">참여</div>
+            </div>
+            <div className="stat-cell">
+              <div className="stat-num">{todayWinRate(info)}%</div>
+              <div className="stat-lbl">정답률</div>
+            </div>
+            <div className="stat-cell">
+              <div className="stat-num">{info.avgGuesses || "–"}</div>
+              <div className="stat-lbl">평균 추측</div>
+            </div>
+          </div>
+
+          {info.solved > 0 && (
+            <div className="dist">
+              <div className="dist-title">
+                추측 횟수 분포
+                <span className="dist-note"> · 맞힌 {info.solved.toLocaleString()}명 기준</span>
+              </div>
+              {GUESS_BUCKETS.map((b) => {
+                const c = info.guessDist[b] ?? 0;
+                return (
+                  <div className="dist-row" key={b}>
+                    <span className="dist-lbl">{b}</span>
+                    <div className="dist-bar">
+                      <span
+                        className={`dist-fill ${b === myBucket ? "hi" : ""}`}
+                        style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
+                      >
+                        {c > 0 && <em>{c}</em>}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 function metaText(db: GameDB, g: GameMeta): string {
   const parts: string[] = [];
   const cats = categoryNames(db, g).slice(0, 3);
@@ -323,6 +392,8 @@ export default function Page() {
   const [rankError, setRankError] = useState("");
   // 오늘 맞힌 사람 중 내 백분위. 서버 집계가 없으면 계속 null(UI 자체를 감춘다).
   const [pct, setPct] = useState<PercentileResult | null>(null);
+  // 오늘 전체 현황(익명 집계). 백분위와 달리 포기자도 볼 수 있다.
+  const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
   const [showBackup, setShowBackup] = useState(false);
   const [backupText, setBackupText] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
@@ -335,6 +406,9 @@ export default function Page() {
   // 백분위 재조회 쓰로틀용 마지막 성공 시각(ms) + 진행 중 플래그.
   const pctAtRef = useRef(0);
   const pctBusyRef = useRef(false);
+  // 전체 현황 재조회용(같은 쓰로틀 간격).
+  const statsAtRef = useRef(0);
+  const statsBusyRef = useRef(false);
 
   // 특정 퍼즐 날짜의 판을 화면에 적용: 상태 초기화 후 로컬 저장(같은 날짜) 복원.
   // 최초 로드와 하루 경계(오전 9시) 자동 전환에서 공용.
@@ -355,9 +429,11 @@ export default function Page() {
     setRankOpen(false);
     setRankError("");
     setPct(null);
+    setTodayStats(null);
     seqRef.current = 0;
     inFlightRef.current.clear();
     pctAtRef.current = 0;
+    statsAtRef.current = 0;
     // 로컬 저장 복원 (같은 날짜만)
     try {
       const raw = localStorage.getItem(`bomantle:${info.date}`);
@@ -446,22 +522,23 @@ export default function Page() {
   }, [won, today]);
 
   /**
-   * 결과 제출 + 백분위 조회. 서버가 멱등(같은 cid는 첫 기록 고정)이라 재호출이 안전하고,
-   * 표본이 하루 내내 늘기 때문에 탭에 돌아올 때마다 갱신한다. 실패는 조용히 무시
-   * (저장된 값이 그대로 남는다 — 게임 진행과 무관한 부가 정보이므로 에러 UI를 띄우지 않는다).
+   * 결과 제출(정답·포기 모두) + 정답이면 백분위 조회. 서버가 멱등(같은 cid는 첫 기록 고정)이라
+   * 재호출이 안전하고, 표본이 하루 내내 늘기 때문에 탭에 돌아올 때마다 갱신한다.
+   * 포기도 보내야 전체 현황의 참여 수·정답률 분모가 생긴다(순위 표본에는 안 들어감).
+   * 실패는 조용히 무시 — 게임 진행과 무관한 부가 정보라 에러 UI를 띄우지 않는다.
    */
   const refreshPct = useCallback(async (force = false) => {
     if (!today || !won) return;
-    if (!rows.some((r) => r.win)) return; // 포기는 표본에 없다
     if (pctBusyRef.current) return;
     if (!force && Date.now() - pctAtRef.current < PCT_REFRESH_MS) return;
     const cid = deviceId();
     if (!cid) return;
+    const solved = rows.some((r) => r.win);
     pctBusyRef.current = true;
     try {
-      const r = await fetchResult(cid, hints.length, rows.length);
+      const r = await fetchResult(cid, hints.length, rows.length, solved);
       pctAtRef.current = Date.now();
-      if (r) setPct(r);
+      if (r && solved) setPct(r); // 포기 응답에는 순위가 없다
     } catch {
       // 무시 — 다음 트리거에서 다시 시도한다
     } finally {
@@ -469,18 +546,44 @@ export default function Page() {
     }
   }, [today, won, rows, hints.length]);
 
-  // 정답 확정 직후 1회(강제) + 탭 복귀 시 갱신(쓰로틀).
+  /** 통계 모달 열기. 열 때 전체 현황을 함께 받아온다(안 보는 사람에겐 요청이 안 나감). */
+  function openStats() {
+    setShowStats(true);
+    refreshTodayStats();
+  }
+
+  /** 오늘 전체 현황. 제출과 별개인 읽기 전용 집계라 완료 전에도 볼 수 있다. */
+  const refreshTodayStats = useCallback(async (force = false) => {
+    if (statsBusyRef.current) return;
+    if (!force && Date.now() - statsAtRef.current < PCT_REFRESH_MS) return;
+    statsBusyRef.current = true;
+    try {
+      const s = await fetchStats();
+      statsAtRef.current = Date.now();
+      if (s) setTodayStats(s);
+    } catch {
+      // 무시
+    } finally {
+      statsBusyRef.current = false;
+    }
+  }, []);
+
+  // 게임 완료 직후 1회(강제) + 탭 복귀 시 갱신(쓰로틀).
+  // 제출이 먼저 끝나야 전체 현황에 내가 포함되므로 순서를 지킨다.
   useEffect(() => {
-    refreshPct(true);
+    if (!won || !today) return;
+    refreshPct(true).then(() => refreshTodayStats(true));
   }, [won, today]);
 
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === "visible") refreshPct();
+      if (document.visibilityState !== "visible") return;
+      refreshPct();
+      refreshTodayStats();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [refreshPct]);
+  }, [refreshPct, refreshTodayStats]);
 
   // 다음 초기화까지 1초마다 카운트다운 갱신
   useEffect(() => {
@@ -701,7 +804,7 @@ export default function Page() {
       <header className="top">
         <button
           className="stats-open"
-          onClick={() => setShowStats(true)}
+          onClick={openStats}
           aria-label="통계 보기"
           title="통계"
         >
@@ -742,6 +845,19 @@ export default function Page() {
             </>
           )}
           {pct && rows.some((r) => r.win) && <PercentileCard info={pct} />}
+          {/* 포기한 사람에겐 백분위가 없다(표본이 정답자뿐). 대신 전체 현황을 보여준다. */}
+          {!rows.some((r) => r.win) && todayStats && todayStats.players > 0 && (
+            <div className="pct">
+              <div className="pct-pending">
+                🌏 오늘 {todayStats.players.toLocaleString()}명 중{" "}
+                <b>{todayStats.solved.toLocaleString()}명</b>이 맞혔어요
+                <div className="pct-note">
+                  정답률 {todayWinRate(todayStats)}%
+                  {todayStats.avgGuesses > 0 && ` · 평균 ${todayStats.avgGuesses}번 추측`}
+                </div>
+              </div>
+            </div>
+          )}
           {answerInfo && <AnswerCard info={answerInfo} />}
 
           {answerInfo && db && (
@@ -821,7 +937,7 @@ export default function Page() {
             <button className="share-btn" onClick={shareResult}>
               📋 결과 공유
             </button>
-            <button className="stats-btn" onClick={() => setShowStats(true)}>
+            <button className="stats-btn" onClick={openStats}>
               📊 통계
             </button>
           </div>
@@ -1026,6 +1142,14 @@ export default function Page() {
                   })()}
                 </div>
               </>
+            )}
+
+            {/* 서버 집계가 없으면(로컬·배포 전) 통째로 감춘다 */}
+            {todayStats && (
+              <TodayStatsCard
+                info={todayStats}
+                myBucket={won && rows.some((r) => r.win) ? bucketOf(rows.length) : null}
+              />
             )}
 
             <div className="backup">

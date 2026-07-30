@@ -5,6 +5,7 @@ import type {
   PercentileResult,
   RankingPage,
   TodayInfo,
+  TodayStats,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
@@ -54,14 +55,23 @@ export async function fetchResult(
   cid: string,
   hints: number,
   guesses: number,
+  solved: boolean,
 ): Promise<PercentileResult | null> {
   const r = await fetch(`${BASE}/api/result`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ cid, hints, guesses }),
+    body: JSON.stringify({ cid, hints, guesses, solved }),
   });
   if (!r.ok) throw new Error("result failed");
   const data = (await r.json()) as PercentileResult | { available: false };
+  return "available" in data ? null : data;
+}
+
+/** 오늘 전체 현황(익명 집계). 쓰기 없음 — 제출과 무관하게 아무나 볼 수 있다. */
+export async function fetchStats(): Promise<TodayStats | null> {
+  const r = await fetch(`${BASE}/api/stats`);
+  if (!r.ok) throw new Error("stats failed");
+  const data = (await r.json()) as TodayStats | { available: false };
   return "available" in data ? null : data;
 }
 
