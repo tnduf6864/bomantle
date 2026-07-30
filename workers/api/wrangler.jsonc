@@ -18,20 +18,32 @@
 			"remote": true
 		}
 	],
-	// 날짜별 접속자 카운터 DO. 무료 플랜은 SQLite 클래스만 지원(new_sqlite_classes).
+	// 날짜별 DO. 무료 플랜은 SQLite 클래스만 지원(new_sqlite_classes).
+	// VISITS = 접속자 카운터, RESULTS = 결과 보드(백분위·순위, SQL 테이블 사용).
 	"durable_objects": {
 		"bindings": [
 			{
 				"name": "VISITS",
 				"class_name": "VisitCounter"
+			},
+			{
+				"name": "RESULTS",
+				"class_name": "ResultBoard"
 			}
 		]
 	},
+	// 기존 태그는 절대 수정하지 말 것 — 새 클래스는 새 태그로만 추가한다.
 	"migrations": [
 		{
 			"tag": "v1",
 			"new_sqlite_classes": [
 				"VisitCounter"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"ResultBoard"
 			]
 		}
 	],

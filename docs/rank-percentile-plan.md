@@ -1,7 +1,19 @@
 # 정답 백분위(상위 N%) 기능 — 구현 계획
 
-> 작성: 2026-07-29 세션. **아직 코드 작업 전(0%)**, 다음 세션에서 이 문서대로 구현하면 된다.
+> 작성: 2026-07-29 세션. **2026-07-30 구현 완료** (배포만 남음 — 5번 체크리스트 참고).
+> 계획과 다르게 간 부분은 아래 "실제 구현과의 차이"에 정리했다.
 > 관련: [TODO.md](../TODO.md) 6번(전체 익명 집계 통계) — 아래 "TODO 6번과의 관계" 참고.
+
+## 실제 구현과의 차이
+
+| 계획 | 실제 | 이유 |
+|---|---|---|
+| DO 파일명 `src/results.ts` + 순수로직 `src/rank.ts` | 그대로 | — |
+| 순위·분포를 SQL `COUNT`/`GROUP BY`로 계산 | **행을 읽어 `rank.ts`에서 JS로 계산** | 타이브레이크 규칙이 SQL·JS 두 곳에 생기면 어긋난다. 인덱스 범위 스캔도 결국 같은 행을 읽어 이득이 작고, 표본은 하루·정답자로 한정돼 작다. 표본이 수만이 되면 DO 내부 스냅샷 캐시가 다음 단계 |
+| 범위 밖 입력은 클램프 | **거부(400)** | 조용히 보정하면 조작된 값이 순위에 섞인다 |
+| `results` 테이블에 `solved` 없음 | **`solved` 컬럼 포함**(순위는 `solved=1`만) | TODO 6번 통합 시 마이그레이션이 필요 없게 미리 넣었다. 현재 클라는 맞혔을 때만 제출 |
+| 클라 타입명 `RankResult` | **`PercentileResult`** | 웹에는 이미 유사도 순위 목록용 `Ranking*` 타입이 있어 혼동 방지 |
+| 바인딩 없을 때 "null 계열 응답" | `{ available: false }` → `fetchResult`가 `null` 반환 → **UI 자체를 감춤** | "0명 참여"처럼 거짓으로 읽히는 표시를 피한다 |
 
 오늘의 문제를 맞힌 사용자에게 **"오늘 맞힌 사람 중 상위 N%"** 를 보여준다.
 개인 통계(`lib/stats.ts`, localStorage)와 달리 **서버에 익명 집계를 남겨야** 성립하는 기능.
@@ -172,12 +184,14 @@ export interface RankResult {
 
 ## 5. 검증 · 배포 체크리스트
 
-- [ ] `pnpm --filter @bomantle/api test` (rank.test.ts 포함) / `typecheck`
-- [ ] `wrangler dev` 로 `/api/result` 확인 — DO는 로컬에서도 동작. 여러 cid로 몇 건 넣어 순위·타이브레이크 눈으로 검증
-- [ ] 웹: 정답 → 배너 표시 → 새로고침 → 저장값 즉시 표시 후 갱신되는지
-- [ ] 하루 경계(오전 9시) 넘길 때 `rank` 초기화되는지
-- [ ] `wrangler deploy` (migration v2 자동 적용)
-- [ ] CI(`.github/workflows/ci.yml`)는 test 스크립트만 갱신하면 그대로 통과
+- [x] `pnpm --filter @bomantle/api test` (rank.test.ts 16건 포함, 전체 43건 통과) / `typecheck`
+- [x] `wrangler dev` 로 `/api/result` 확인 — 6개 cid로 순위·타이브레이크·백분위(1/5→20%,
+      5/5→100%) 확인. 같은 cid로 조작된 값 재제출 시 첫 기록 유지(멱등) 확인. 검증 실패 400 확인
+- [x] 웹: 정답 배너에 카드 표시 → 새로고침 시 저장값 즉시 표시 후 서버값으로 갱신됨 확인.
+      표본 부족(pending) 화면도 확인
+- [ ] 하루 경계(오전 9시) 넘길 때 `pct` 초기화 — `applyDay`에 `setPct(null)` 넣었으나 실제 경계는 미확인
+- [ ] `wrangler deploy` (migration v2 자동 적용) ⭐남은 작업
+- [x] CI(`.github/workflows/ci.yml`)는 test 스크립트만 갱신 → 그대로 통과 예상
 
 ---
 

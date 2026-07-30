@@ -16,10 +16,14 @@ import {
   dailyAnswerFromSeed,
 } from "./answer.ts";
 import { buildHint, type FullGame } from "./hint.ts";
+import { buildAnswerInfo } from "./reveal.ts";
+import { parsePage, sliceRanking } from "./ranklist.ts";
+import { sanitizeSubmission } from "./rank.ts";
+import { ResultBoard } from "./results.ts";
 import { VisitCounter } from "./visits.ts";
 
 // DO 클래스는 엔트리에서 export 되어야 wrangler가 바인딩할 수 있다.
-export { VisitCounter };
+export { VisitCounter, ResultBoard };
 
 const games = gamesData as unknown as FullGame[];
 const categories = catData as Record<string, string>;
@@ -34,6 +38,7 @@ const boxartSet = new Set<number>(boxartIds as number[]);
 interface Env {
   ANSWERS?: KVNamespace;
   VISITS?: DurableObjectNamespace<VisitCounter>;
+  RESULTS?: DurableObjectNamespace<ResultBoard>;
 }
 
 interface DayState {
@@ -101,10 +106,15 @@ function corsHeaders(req: Request): Record<string, string> {
   return headers;
 }
 
-function json(body: unknown, req: Request, status = 200): Response {
+function json(
+  body: unknown,
+  req: Request,
+  status = 200,
+  extra: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders(req) },
+    headers: { "Content-Type": "application/json", ...corsHeaders(req), ...extra },
   });
 }
 
@@ -116,6 +126,12 @@ function json(body: unknown, req: Request, status = 200): Response {
  */
 function imageUrl(game: { id: number }): string | null {
   return boxartSet.has(game.id) ? `/boxart/${game.id}.jpg` : null;
+}
+
+/** 정답 공개용 게임 정보(맞힘·포기 공용). 정답 확정 후에만 호출할 것. */
+function revealAnswer(answerId: number) {
+  const ans = games.find((g) => g.id === answerId)!;
+  return buildAnswerInfo(ans, categories, mechanisms, imageUrl(ans));
 }
 
 export default {
@@ -165,13 +181,9 @@ export default {
       }
       const day = await getDayState(env, date);
       const result = evaluateGuess(day.ranking, day.pos, day.answerId, gameId);
-      // win일 때만 정답 이름·박스아트 동봉
+      // win일 때만 정답 정보(이름·박스아트·사양) 동봉
       if (result.win) {
-        const ans = games.find((g) => g.id === day.answerId)!;
-        return json(
-          { ...result, answer: { id: ans.id, name_ko: ans.name_ko, image: imageUrl(ans) } },
-          req,
-        );
+        return json({ ...result, answer: revealAnswer(day.answerId) }, req);
       }
       return json(result, req);
     }
@@ -179,18 +191,47 @@ export default {
     // POST /api/giveup — 정답 공개
     if (url.pathname === "/api/giveup" && req.method === "POST") {
       const day = await getDayState(env, date);
-      const ans = games.find((g) => g.id === day.answerId)!;
+      return json({ answer: revealAnswer(day.answerId) }, req);
+    }
+
+    // GET /api/ranking?offset=&limit= — 오늘 정답 기준 전체 유사도 순위 목록.
+    // 정답 공개(맞힘·포기) 후 화면용. 랭킹은 이미 캐시돼 있어 자르기만 하면 된다.
+    // 1위 = 정답과 가장 가까운 게임이라 스포일러성이 있지만, /api/giveup이 이미
+    // 정답 자체를 누구에게나 내주므로 새로 생기는 노출은 아니다.
+    if (url.pathname === "/api/ranking" && req.method === "GET") {
+      const day = await getDayState(env, date);
+      const total = day.ranking.length; // 정답 자신은 제외된 수
+      const page = parsePage(url.searchParams, total);
       return json(
-        {
-          answer: {
-            id: ans.id,
-            name_ko: ans.name_ko,
-            name_en: ans.name_en,
-            image: imageUrl(ans),
-          },
-        },
+        { total, offset: page.offset, items: sliceRanking(day.ranking, page) },
         req,
+        200,
+        // 같은 날짜·같은 정답이면 항상 같은 응답. 정답 KV 오버라이드 반영 주기와 맞춘다.
+        { "Cache-Control": `public, max-age=${KV_CACHE_TTL}` },
       );
+    }
+
+    // POST /api/result { cid, hints, guesses } — 오늘 맞힌 사람 중 내 순위·백분위.
+    // 같은 cid로 다시 호출해도 기록은 첫 제출로 고정되고 순위만 재계산된다(멱등).
+    // 날짜는 서버 kstDate()로 결정 — 클라가 보낸 날짜는 신뢰하지 않는다.
+    if (url.pathname === "/api/result" && req.method === "POST") {
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "invalid body" }, req, 400);
+      }
+      const sub = sanitizeSubmission(body);
+      if (!sub) return json({ error: "invalid body" }, req, 400);
+
+      // 바인딩 없음(로컬 등)·DO 오류는 게임 진행에 영향 없이 조용히 비활성 처리.
+      if (!env.RESULTS) return json({ available: false }, req);
+      try {
+        const board = env.RESULTS.get(env.RESULTS.idFromName(date));
+        return json(await board.submit(sub), req);
+      } catch {
+        return json({ available: false }, req);
+      }
     }
 
     // GET /api/hint?level=N — 단계별 힌트 (정답 이름은 비노출)

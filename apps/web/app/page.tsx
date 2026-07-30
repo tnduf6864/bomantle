@@ -1,9 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { GameMeta, GuessRow, HintData, TodayInfo } from "../lib/types";
+import type {
+  AnswerInfo,
+  GameMeta,
+  GuessRow,
+  HintData,
+  PercentileResult,
+  RankingItem,
+  TodayInfo,
+} from "../lib/types";
 import { loadGameDB, resolve, suggest, categoryNames, type GameDB } from "../lib/games";
-import { fetchToday, fetchGuess, fetchGiveup, fetchHint, fetchVisit } from "../lib/api";
+import {
+  fetchToday,
+  fetchGuess,
+  fetchGiveup,
+  fetchHint,
+  fetchRanking,
+  fetchResult,
+  fetchVisit,
+} from "../lib/api";
 import {
   loadStats,
   recordResult,
@@ -44,7 +60,12 @@ function starRating(n: number): string {
 }
 
 // 공유 텍스트. 정답 이름은 절대 넣지 않음.
-function buildShareText(rows: GuessRow[], hintCount: number, streak = 0): string {
+function buildShareText(
+  rows: GuessRow[],
+  hintCount: number,
+  streak = 0,
+  pct: PercentileResult | null = null,
+): string {
   const solved = rows.some((r) => r.win);
   const n = rows.length;
   const head = `🎲 보맨틀`;
@@ -52,8 +73,10 @@ function buildShareText(rows: GuessRow[], hintCount: number, streak = 0): string
   const hintLine = hintCount > 0 ? `\n💡 힌트횟수 ${"💀".repeat(hintCount)}` : "";
   // 연속 정답(2일 이상일 때만 자랑)
   const streakLine = solved && streak >= 2 ? `\n🔥 연속 ${streak}일` : "";
+  // 백분위(표본이 충분할 때만). 순위·인원은 넣지 않는다 — 공유 시점마다 값이 달라 혼란.
+  const pctLine = solved && pct && !pct.pending ? `\n🏆 상위 ${pct.percentile}%` : "";
   if (solved) {
-    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${streakLine}${hintLine}\n\nhttps://bomantle.pages.dev`;
+    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${pctLine}${streakLine}${hintLine}\n\nhttps://bomantle.pages.dev`;
   }
   // 포기: 가장 가까이 갔던 순위 (자랑 + 스포일러 없음)
   const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
@@ -63,6 +86,34 @@ function buildShareText(rows: GuessRow[], hintCount: number, streak = 0): string
 
 // 매일 게임이 초기화되는 시각(Asia/Seoul 기준). 백엔드 RESET_HOUR과 일치시킬 것.
 const RESET_HOUR = 9;
+
+// 전체 순위 목록을 한 번에 가져오는 개수(서버 MAX_LIMIT=200 이하).
+const RANK_PAGE = 100;
+
+// 백분위 재조회 최소 간격. 표본이 하루 내내 늘어 값이 변하지만, 탭을 자주 왕복해도
+// 요청이 몰리지 않게 막는다.
+const PCT_REFRESH_MS = 60_000;
+
+/**
+ * 기기 식별자. 같은 기기의 재제출을 서버가 알아보게 하는 용도(백분위 기록 고정)로만 쓴다.
+ * 임의 UUID이며 개인정보가 아니고, 서버는 이 값으로 아무것도 조회하지 않는다.
+ * randomUUID가 없는(비보안 컨텍스트) 브라우저도 있어 폴백을 둔다.
+ */
+function deviceId(): string | null {
+  try {
+    const key = "bomantle:cid";
+    const saved = localStorage.getItem(key);
+    if (saved) return saved;
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    localStorage.setItem(key, id);
+    return id;
+  } catch {
+    return null; // 저장 불가 환경(시크릿 모드 등)은 백분위 기능만 비활성
+  }
+}
 
 // 문의·제보 구글폼. 응답은 연결된 구글 스프레드시트로 자동 수집됨.
 // 폼 생성 후 "보내기 → 링크(🔗)"의 단축 URL을 여기에 붙여넣으면 됨.
@@ -97,6 +148,147 @@ function formatCountdown(ms: number): string {
   return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
 }
 
+/** 정답 카드 사양 목록. 값이 없는 항목은 통째로 뺀다(빈 줄 방지). */
+function answerSpecs(a: AnswerInfo): { label: string; value: string; wide?: boolean }[] {
+  const out: { label: string; value: string; wide?: boolean }[] = [];
+  const push = (label: string, value: string | null, wide = false) => {
+    if (value) out.push({ label, value, wide });
+  };
+  const players =
+    a.players_min == null
+      ? null
+      : a.players_min === a.players_max
+        ? `${a.players_min}명`
+        : `${a.players_min}-${a.players_max}명`;
+  push("출시", a.year);
+  push("인원", players && a.best_players ? `${players} (베스트 ${a.best_players}인)` : players);
+  push("플레이타임", a.time_min ? `${a.time_min}분` : null);
+  push("난이도", a.weight != null ? `${a.weight.toFixed(2)} / 5` : null);
+  push("연령", a.age != null ? `${a.age}세 이상` : null);
+  push("평점", a.rate != null ? a.rate.toFixed(1) : null);
+  push("랭킹", a.rank != null ? `보드라이프 ${a.rank}위` : null);
+  push("디자이너", a.designers.join(", ") || null, true);
+  return out;
+}
+
+/** 정답 공개 시 보여주는 게임 정보 카드(박스아트 + 사양 + 태그 + 원문 링크). */
+function AnswerCard({ info }: { info: AnswerInfo }) {
+  const specs = answerSpecs(info);
+  const url = `https://boardlife.co.kr/game/${info.id}`;
+  const caption = info.name_en ?? info.name_ko ?? "";
+  return (
+    <div className="answer-card">
+      <div className="answer-head">
+        {info.image && (
+          <a href={url} target="_blank" rel="noopener noreferrer">
+            <img
+              className="answer-img"
+              src={info.image}
+              alt={`${info.name_ko ?? ""} 박스아트`}
+            />
+          </a>
+        )}
+        <div className="answer-title">
+          {caption && <div className="answer-en">{caption}</div>}
+          {info.types.length > 0 && (
+            <div className="answer-type">{info.types.join(" · ")}</div>
+          )}
+          <a className="answer-link-text" href={url} target="_blank" rel="noopener noreferrer">
+            보드라이프에서 보기 ↗
+          </a>
+        </div>
+      </div>
+
+      {specs.length > 0 && (
+        <dl className="answer-specs">
+          {specs.map((s) => (
+            <div className={`answer-spec ${s.wide ? "wide" : ""}`} key={s.label}>
+              <dt>{s.label}</dt>
+              <dd>{s.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {(info.categories.length > 0 || info.mechanisms.length > 0) && (
+        <div className="answer-tags">
+          {info.categories.length > 0 && (
+            <div className="answer-tag-row">
+              <span className="answer-tag-label">테마</span>
+              {info.categories.map((c) => (
+                <span className="tag" key={c}>
+                  {c}
+                </span>
+              ))}
+            </div>
+          )}
+          {info.mechanisms.length > 0 && (
+            <div className="answer-tag-row">
+              <span className="answer-tag-label">진행방식</span>
+              {info.mechanisms.map((m) => (
+                <span className="tag" key={m}>
+                  {m}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 오늘 맞힌 사람 중 내 위치. 표본은 **맞힌 사람만**이므로 문구를 반드시 "맞힌 N명 중"으로
+ * 쓴다(포기자를 포함한 것처럼 읽히면 수치가 거짓이 된다).
+ */
+function PercentileCard({ info }: { info: PercentileResult }) {
+  if (info.pending) {
+    return (
+      <div className="pct">
+        <div className="pct-pending">
+          🏆 아직 집계 중 · 오늘 {info.total}명이 맞혔어요
+          <div className="pct-note">몇 명 더 맞히면 상위 %가 표시돼요</div>
+        </div>
+      </div>
+    );
+  }
+
+  const maxHint = Math.max(1, ...info.hintDist);
+  return (
+    <div className="pct">
+      <div className="pct-head">
+        상위 <b>{info.percentile}%</b>
+      </div>
+      <div className="pct-bar">
+        <span className="pct-fill" style={{ width: `${info.percentile}%` }} />
+        <span className="pct-marker" style={{ left: `${info.percentile}%` }} />
+      </div>
+      <div className="pct-note">
+        오늘 맞힌 {info.total.toLocaleString()}명 중 <b>{info.rank.toLocaleString()}위</b> · 힌트{" "}
+        {info.hints}개 · {info.guesses}번 추측
+      </div>
+
+      <div className="pct-dist">
+        <div className="dist-title">힌트 개수별 정답자</div>
+        {info.hintDist.map((c, h) => (
+          <div className="dist-row" key={h}>
+            <span className="dist-lbl">{h}개</span>
+            <div className="dist-bar">
+              <span
+                className={`dist-fill ${h === info.hints ? "hi" : ""}`}
+                style={{ width: `${c ? Math.max(12, (c / maxHint) * 100) : 0}%` }}
+              >
+                {c > 0 && <em>{c}</em>}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function metaText(db: GameDB, g: GameMeta): string {
   const parts: string[] = [];
   const cats = categoryNames(db, g).slice(0, 3);
@@ -113,8 +305,8 @@ export default function Page() {
   const [error, setError] = useState("");
   const [won, setWon] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
-  // 정답 공개 시 박스아트·보드라이프 링크용 (id = 보드라이프 게임 id)
-  const [answerInfo, setAnswerInfo] = useState<{ id: number; image: string | null } | null>(null);
+  // 정답 공개 시 게임 정보 카드용 (id = 보드라이프 게임 id)
+  const [answerInfo, setAnswerInfo] = useState<AnswerInfo | null>(null);
   const [activeIdx, setActiveIdx] = useState(0);
   const [shareMsg, setShareMsg] = useState("");
   const [hints, setHints] = useState<HintData[]>([]);
@@ -123,6 +315,14 @@ export default function Page() {
   const [visitors, setVisitors] = useState<number | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [showStats, setShowStats] = useState(false);
+  // 정답 공개 후 전체 순위 목록(누적). 펼쳤을 때만 받아온다.
+  const [rankItems, setRankItems] = useState<RankingItem[]>([]);
+  const [rankTotal, setRankTotal] = useState(0);
+  const [rankOpen, setRankOpen] = useState(false);
+  const [rankLoading, setRankLoading] = useState(false);
+  const [rankError, setRankError] = useState("");
+  // 오늘 맞힌 사람 중 내 백분위. 서버 집계가 없으면 계속 null(UI 자체를 감춘다).
+  const [pct, setPct] = useState<PercentileResult | null>(null);
   const [showBackup, setShowBackup] = useState(false);
   const [backupText, setBackupText] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
@@ -132,6 +332,9 @@ export default function Page() {
   const inFlightRef = useRef<Set<number>>(new Set());
   // 하루 경계 재조회 진행 중 플래그(중복 fetch 방지).
   const rollingRef = useRef(false);
+  // 백분위 재조회 쓰로틀용 마지막 성공 시각(ms) + 진행 중 플래그.
+  const pctAtRef = useRef(0);
+  const pctBusyRef = useRef(false);
 
   // 특정 퍼즐 날짜의 판을 화면에 적용: 상태 초기화 후 로컬 저장(같은 날짜) 복원.
   // 최초 로드와 하루 경계(오전 9시) 자동 전환에서 공용.
@@ -147,8 +350,14 @@ export default function Page() {
     setQuery("");
     setError("");
     setShareMsg("");
+    setRankItems([]);
+    setRankTotal(0);
+    setRankOpen(false);
+    setRankError("");
+    setPct(null);
     seqRef.current = 0;
     inFlightRef.current.clear();
+    pctAtRef.current = 0;
     // 로컬 저장 복원 (같은 날짜만)
     try {
       const raw = localStorage.getItem(`bomantle:${info.date}`);
@@ -157,20 +366,24 @@ export default function Page() {
         rows: GuessRow[];
         won: boolean;
         answer: string | null;
-        answerInfo?: { id: number; image: string | null } | null;
+        answerInfo?: Partial<AnswerInfo> | null;
         hints?: HintData[];
+        pct?: PercentileResult | null;
       };
       setRows(saved.rows ?? []);
       setWon(saved.won ?? false);
       setAnswer(saved.answer ?? null);
       setHints(saved.hints ?? []);
+      // 저장값을 깜빡임 없이 먼저 그리고, 최신값은 아래 재조회 효과가 덮어쓴다.
+      setPct(saved.pct ?? null);
       seqRef.current = saved.rows?.length ?? 0;
-      if (saved.answerInfo) {
-        setAnswerInfo(saved.answerInfo);
+      // categories 유무로 신버전(게임 정보 포함) 저장인지 판별.
+      if (saved.answerInfo?.categories) {
+        setAnswerInfo(saved.answerInfo as AnswerInfo);
       } else if (saved.won) {
-        // 구버전 저장(박스아트·링크 정보 없음) → 정답 정보 다시 가져와 복구
+        // 구버전 저장(박스아트·링크만 또는 정보 없음) → 정답 정보 다시 가져와 복구
         fetchGiveup()
-          .then((r) => setAnswerInfo({ id: r.answer.id, image: r.answer.image ?? null }))
+          .then((r) => setAnswerInfo(r.answer))
           .catch(() => {});
       }
     } catch {}
@@ -198,9 +411,9 @@ export default function Page() {
     if (!today) return;
     localStorage.setItem(
       `bomantle:${today.date}`,
-      JSON.stringify({ rows, won, answer, answerInfo, hints }),
+      JSON.stringify({ rows, won, answer, answerInfo, hints, pct }),
     );
-  }, [rows, won, answer, answerInfo, hints, today]);
+  }, [rows, won, answer, answerInfo, hints, pct, today]);
 
   // 오늘 첫 방문이면 접속 집계 핑 1회. localStorage 플래그로 같은 날짜 중복 집계 방지.
   // 플래그를 먼저 심으므로 핑이 실패하면 그날은 집계에서 빠짐(중복 집계보다 낫다).
@@ -231,6 +444,43 @@ export default function Page() {
     const solved = rows.some((r) => r.win);
     setStats(recordResult(today.date, solved, rows.length, hints.length));
   }, [won, today]);
+
+  /**
+   * 결과 제출 + 백분위 조회. 서버가 멱등(같은 cid는 첫 기록 고정)이라 재호출이 안전하고,
+   * 표본이 하루 내내 늘기 때문에 탭에 돌아올 때마다 갱신한다. 실패는 조용히 무시
+   * (저장된 값이 그대로 남는다 — 게임 진행과 무관한 부가 정보이므로 에러 UI를 띄우지 않는다).
+   */
+  const refreshPct = useCallback(async (force = false) => {
+    if (!today || !won) return;
+    if (!rows.some((r) => r.win)) return; // 포기는 표본에 없다
+    if (pctBusyRef.current) return;
+    if (!force && Date.now() - pctAtRef.current < PCT_REFRESH_MS) return;
+    const cid = deviceId();
+    if (!cid) return;
+    pctBusyRef.current = true;
+    try {
+      const r = await fetchResult(cid, hints.length, rows.length);
+      pctAtRef.current = Date.now();
+      if (r) setPct(r);
+    } catch {
+      // 무시 — 다음 트리거에서 다시 시도한다
+    } finally {
+      pctBusyRef.current = false;
+    }
+  }, [today, won, rows, hints.length]);
+
+  // 정답 확정 직후 1회(강제) + 탭 복귀 시 갱신(쓰로틀).
+  useEffect(() => {
+    refreshPct(true);
+  }, [won, today]);
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refreshPct();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refreshPct]);
 
   // 다음 초기화까지 1초마다 카운트다운 갱신
   useEffect(() => {
@@ -268,6 +518,41 @@ export default function Page() {
 
   const guessedIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
 
+  // 전체 순위 목록에서 "내가 추측한 게임"을 표시하기 위한 id -> 입력 순서.
+  // 추가 요청 없이 이미 갖고 있는 rows만으로 만든다.
+  const guessSeq = useMemo(
+    () => new Map(rows.map((r) => [r.id, r.seq] as const)),
+    [rows],
+  );
+
+  // 내 추측 중 가장 가까웠던 순위(정답 자신은 rank 0이라 제외).
+  const bestGuessRank = useMemo(() => {
+    const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
+    return ranks.length ? Math.min(...ranks) : 0;
+  }, [rows]);
+
+  // 다음 페이지를 이어붙인다. 중복 append는 offset 일치 검사로 막는다.
+  const loadMoreRanking = useCallback(async () => {
+    setRankError("");
+    setRankLoading(true);
+    try {
+      const page = await fetchRanking(rankItems.length, RANK_PAGE);
+      setRankTotal(page.total);
+      setRankItems((prev) => (prev.length === page.offset ? [...prev, ...page.items] : prev));
+    } catch {
+      setRankError("순위를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setRankLoading(false);
+    }
+  }, [rankItems.length]);
+
+  // 처음 펼칠 때만 첫 페이지를 받는다(안 보는 사람에겐 요청이 안 나감).
+  function toggleRanking() {
+    const next = !rankOpen;
+    setRankOpen(next);
+    if (next && rankItems.length === 0 && !rankLoading) loadMoreRanking();
+  }
+
   // 자동완성: 이미 추측한 게임은 제외 (id 기준 — 동명 다른 게임은 남김)
   const suggestions = useMemo(
     () =>
@@ -304,7 +589,7 @@ export default function Page() {
       if (res.win) {
         setWon(true);
         setAnswer(res.answer?.name_ko ?? game.name_ko);
-        setAnswerInfo({ id: res.answer?.id ?? game.id, image: res.answer?.image ?? null });
+        if (res.answer) setAnswerInfo(res.answer);
       }
     } catch {
       setError("서버 오류예요. 잠시 후 다시 시도해주세요.");
@@ -340,7 +625,7 @@ export default function Page() {
 
   async function shareResult() {
     if (!today) return;
-    const text = buildShareText(rows, hints.length, stats?.curStreak ?? 0);
+    const text = buildShareText(rows, hints.length, stats?.curStreak ?? 0, pct);
     try {
       await navigator.clipboard.writeText(text);
       setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
@@ -355,7 +640,7 @@ export default function Page() {
     try {
       const r = await fetchGiveup();
       setAnswer(r.answer.name_ko);
-      setAnswerInfo({ id: r.answer.id, image: r.answer.image ?? null });
+      setAnswerInfo(r.answer);
       setWon(true);
     } catch {
       setError("정답을 불러오지 못했어요.");
@@ -456,19 +741,82 @@ export default function Page() {
               </div>
             </>
           )}
-          {answerInfo && (
-            <a
-              className="answer-link"
-              href={`https://boardlife.co.kr/game/${answerInfo.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {answerInfo.image && (
-                <img className="answer-img" src={answerInfo.image} alt={`${answer} 박스아트`} />
+          {pct && rows.some((r) => r.win) && <PercentileCard info={pct} />}
+          {answerInfo && <AnswerCard info={answerInfo} />}
+
+          {answerInfo && db && (
+            <div className="rank-section">
+              <button className="rank-toggle" onClick={toggleRanking} aria-expanded={rankOpen}>
+                {rankOpen ? "▲ 전체 순위 접기" : "🏅 전체 순위 보기"}
+              </button>
+
+              {rankOpen && (
+                <>
+                  <div className="rank-summary">
+                    정답과 가까운 순서 · 총 {rankTotal.toLocaleString()}개
+                    {rows.length > 0 && (
+                      <>
+                        {" · "}내 추측 {rows.length}개
+                        {bestGuessRank > 0 && ` (최고 ${bestGuessRank}위)`}
+                      </>
+                    )}
+                  </div>
+
+                  {rankItems.length > 0 && (
+                    <div className="rank-list">
+                      <div className="rank-row answer">
+                        <div className="rank-no">👑</div>
+                        <div className="rank-name">
+                          {answerInfo.name_ko ?? answerInfo.name_en}
+                          <span className="rank-badge is-answer">정답</span>
+                        </div>
+                        <div className="rank-score">100.0</div>
+                      </div>
+                      {rankItems.map((it, i) => {
+                        const g = db.byId.get(it.id);
+                        if (!g) return null; // 워커/웹 games.json 불일치 방어
+                        const seq = guessSeq.get(it.id);
+                        return (
+                          <div
+                            className={`rank-row ${seq !== undefined ? "mine" : ""}`}
+                            key={it.id}
+                          >
+                            <div className="rank-no">{i + 1}</div>
+                            <div className="rank-name">
+                              {g.name_ko ?? g.name_en}
+                              {seq !== undefined && (
+                                <span className="rank-badge">🔍 {seq}번째 추측</span>
+                              )}
+                            </div>
+                            <div className="rank-score">{it.score.toFixed(1)}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {rankError && <div className="error">{rankError}</div>}
+
+                  {rankLoading && rankItems.length === 0 ? (
+                    <div className="rank-summary">불러오는 중…</div>
+                  ) : (
+                    rankItems.length < rankTotal && (
+                      <button
+                        className="rank-more"
+                        onClick={loadMoreRanking}
+                        disabled={rankLoading}
+                      >
+                        {rankLoading
+                          ? "불러오는 중…"
+                          : `더 보기 (${rankItems.length.toLocaleString()} / ${rankTotal.toLocaleString()})`}
+                      </button>
+                    )
+                  )}
+                </>
               )}
-              <span className="answer-link-text">보드라이프에서 보기 ↗</span>
-            </a>
+            </div>
           )}
+
           <div className="banner-actions">
             <button className="share-btn" onClick={shareResult}>
               📋 결과 공유

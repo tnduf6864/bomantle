@@ -22,6 +22,9 @@
   - `wrangler pages deploy out` (또는 CF 대시보드에서 out/ 연결)
 - [ ] CORS/도메인 확인 — 워커 CORS는 `*`로 열려 있음. 커스텀 도메인 쓰면 좁히기 검토.
 - [ ] 배포 후 실제 /api/guess 동작 확인.
+- [ ] **재배포 필요(2026-07-30)**: `ResultBoard` DO 추가 → `wrangler.jsonc` migration `v2`.
+      `wrangler deploy` 시 자동 적용되지만, 배포 전까지 웹의 백분위 카드는 표시되지 않는다
+      (`RESULTS` 바인딩 없음 → `{ available: false }` → UI 감춤).
 
 ## 2. PWA 실제 구성 ✅ 완료
 
@@ -60,27 +63,32 @@
 - [ ] 추측 리스트 가장 가까운 항목 상단 고정 표시 강화
 - [ ] 빈 상태/로딩/에러 카피 다듬기
 
-## 6. 전체 익명 집계 통계 (백엔드 신규)
+## 6. 전체 익명 집계 통계 (백엔드) — 기반 완료, 나머지만 남음
 
-> ⚠️ **[docs/rank-percentile-plan.md](./docs/rank-percentile-plan.md)(정답 백분위 기능)와 통합 예정.**
-> 그쪽이 같은 `POST /api/result`를 쓰고 저장소(DO SQLite)·분포 집계를 공유한다.
-> 착수 전에 그 문서의 "TODO 6번과의 관계" 절을 먼저 읽을 것.
+> ✅ **저장소·수집 경로는 [docs/rank-percentile-plan.md](./docs/rank-percentile-plan.md)(정답 백분위)
+> 구현으로 대체됨.** 이 항목의 원래 설계(D1 + `GET /api/stats`)는 폐기하고
+> `ResultBoard` DO(SQLite, 날짜별 인스턴스) + `POST /api/result`를 재사용한다.
+> 착수 전 그 문서의 "TODO 6번과의 관계" 절을 읽을 것.
 
-개인 통계(5번, localStorage)와 별개로 "오늘의 전체 현황"을 보여주는 기능.
-정답명·개인 식별자 없이 **익명 카운트만** 수집·집계한다.
+이미 되어 있는 것:
 
-- [ ] 저장소: **D1 권장**(원자적 UPSERT로 동시 쓰기 안전) 또는 Durable Object.
-      KV 단독은 read-modify-write 경쟁으로 카운트 유실 → 지양.
-- [ ] 수집 엔드포인트 `POST /api/result { solved, guesses }` (워커)
-  - 날짜는 서버 `kstDate()`로 결정(클라 입력 신뢰 안 함)
-  - 집계 필드: 플레이 수, 정답 수, 추측 횟수 합/분포(버킷 재사용)
-  - 어뷰즈: 클라 `localStorage`에 제출 완료 플래그 → 하루 1회만 전송.
-    서버측도 과도 방지 검토(간단한 rate limit 또는 중복 허용하되 영향 최소)
-- [ ] 조회 엔드포인트 `GET /api/stats?date=YYYY-MM-DD`
-      → `{ players, winRate, avgGuesses, dist }` (엣지 캐시로 KV/D1 읽기 절약)
+- [x] 저장소 — `workers/api/src/results.ts` `ResultBoard`(DO SQLite). D1보다 나음:
+      날짜별 인스턴스로 자연 샤딩 + 단일 스레드라 쓰기 경쟁 없음
+- [x] 수집 — `POST /api/result { cid, hints, guesses }`. 날짜는 서버 `kstDate()`로 결정.
+      어뷰즈 방지는 `INSERT OR IGNORE`(cid당 첫 기록만) — 반복 제출해도 이득 없음
+- [x] 분포 집계 — 힌트 개수별 + 추측 버킷별(웹 `lib/stats.ts` 버킷 라벨과 동일)
+- [x] 개인정보 원칙 — 정답명·식별 가능 정보 미수집. cid는 클라가 만든 임의 UUID
+- [x] 읽기 전용 `snapshot()`(쓰기 없이 표본 수 + 분포) — DO에 이미 있음, 라우트만 없다
+
+남은 것:
+
+- [ ] 포기도 제출 — 클라가 포기 시 `solved: false`로 POST(서버·스키마는 이미 지원).
+      그래야 정답률 분모가 생긴다
+- [ ] 조회 라우트 `GET /api/stats` → `snapshot()` 노출(엣지 캐시 검토).
+      또는 `/api/today` 응답에 표본 수만 얹는 방식도 가능
 - [ ] 웹: 통계 모달에 "오늘의 전체 현황" 카드 추가(개인 통계 위/아래).
-      집계 버킷 분포는 개인 분포와 같은 UI 재사용(`lib/stats.ts` 버킷 공유)
-- [ ] 개인정보 원칙: 식별자·정답명 미수집. 순수 카운트만.
+      분포 UI는 `.dist-*` 클래스 재사용 — 백분위 카드가 이미 같은 방식으로 쓴다
+- [ ] 평균 추측·정답률 필드는 `snapshot()`에 추가 계산 필요(현재는 표본 수 + 분포만)
 
 ## 7. 검색 노출(SEO)
 
@@ -95,9 +103,12 @@
 
 ## 8. 테스트 / CI ✅
 
-- [x] 워커 순수 함수 유닛테스트 — `workers/api/src/hint.test.ts`(초성·난이도밴드·commonest를
+- [x] 워커 순수 함수 유닛테스트(43건) — `workers/api/src/hint.test.ts`(초성·난이도밴드·commonest를
   buildHint 블랙박스로), `answer.test.ts`(buildAnswerPool 필터·프랜차이즈 dedup·정렬,
-  dailyAnswerFromSeed 결정론, kstDate 9시 경계, puzzleNumber). `pnpm --filter @bomantle/api test`
+  dailyAnswerFromSeed 결정론, kstDate 9시 경계, puzzleNumber), `reveal.test.ts`(정답 공개 정보),
+  `ranklist.test.ts`(페이지네이션 클램프), `rank.test.ts`(제출 검증·백분위 경계·버킷·타이브레이크).
+  `pnpm --filter @bomantle/api test`
+- [x] DO(`visits.ts`/`results.ts`)는 순수 로직을 분리해 테스트한다 — DO 자체는 `wrangler dev` 수동 검증
 - [x] core 테스트 CI-안전화: `data/out`(gitignore) 없으면 추적되는 `workers/api/src/games.json`
   (동일 SHA)로 폴백 — `engine.test.ts`
 - [x] GitHub Actions `.github/workflows/ci.yml` — install → core/api typecheck+test → web build

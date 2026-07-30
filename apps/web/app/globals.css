@@ -204,27 +204,270 @@ header.top .visitors {
   margin-bottom: 16px;
 }
 .banner b { font-size: 18px; }
-.answer-link {
-  display: block;
+/* 정답 공개 카드: 박스아트 + 사양 + 태그 */
+.answer-card {
   margin-top: 14px;
-  text-decoration: none;
-  color: var(--text);
+  padding: 14px;
+  text-align: left;
+  background: rgba(15, 17, 21, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.answer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .answer-img {
   display: block;
-  margin: 0 auto 8px;
-  max-width: 160px;
-  max-height: 160px;
+  width: 92px;
+  height: auto;
+  max-height: 120px;
+  /* 박스아트 비율 유지(정사각 크롭 방지) */
+  object-fit: contain;
+  flex-shrink: 0;
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+.answer-title { min-width: 0; }
+.answer-en {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+.answer-type {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
 .answer-link-text {
   display: inline-block;
+  margin-top: 8px;
   font-size: 13px;
-  color: var(--accent);
   font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
 }
-.answer-link:hover .answer-link-text { text-decoration: underline; }
+.answer-link-text:hover { text-decoration: underline; }
+
+.answer-specs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 14px;
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.answer-spec {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.answer-spec.wide { grid-column: 1 / -1; }
+.answer-spec dt {
+  flex-shrink: 0;
+  min-width: 62px;
+  color: var(--muted);
+}
+.answer-spec dd {
+  margin: 0;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.answer-tags {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.answer-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.answer-tag-label {
+  flex-shrink: 0;
+  min-width: 54px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.answer-tags .tag {
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+@media (max-width: 420px) {
+  .answer-specs { grid-template-columns: 1fr; }
+}
+
+/* 정답 공개 후 전체 유사도 순위 목록 */
+/* 백분위 카드(오늘 맞힌 사람 중 내 위치). 정답 카드 위에 놓인다. */
+.pct {
+  margin-top: 14px;
+  padding: 14px;
+  text-align: left;
+  background: rgba(15, 17, 21, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.pct-head {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pct-head b {
+  display: block;
+  margin-top: 2px;
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--warm);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -1px;
+}
+/* 0~100% 게이지. 왼쪽이 상위 — 채워진 폭이 좁을수록 잘한 것. */
+.pct-bar {
+  position: relative;
+  height: 10px;
+  margin: 10px 0 8px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.pct-fill {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--warm), var(--accent));
+  transition: width 0.5s ease;
+}
+.pct-marker {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  background: var(--text);
+  transition: left 0.5s ease;
+}
+.pct-note {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.pct-note b { font-size: 12px; color: var(--text); }
+.pct-pending { text-align: center; font-size: 13px; }
+.pct-pending .pct-note { margin-top: 4px; }
+.pct-dist {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.rank-section { margin-top: 14px; text-align: left; }
+.rank-toggle {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(15, 17, 21, 0.45);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rank-toggle:hover { border-color: var(--accent); }
+.rank-summary {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 2px 8px;
+}
+/* 수천 개짜리 목록이라 컨테이너 안에서만 스크롤시킨다 */
+.rank-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15, 17, 21, 0.45);
+  padding: 6px;
+}
+.rank-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+.rank-row + .rank-row { margin-top: 2px; }
+.rank-row.answer {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #15251c;
+  border-color: var(--cool);
+}
+.rank-row.mine {
+  background: rgba(91, 140, 255, 0.1);
+  border-color: var(--accent);
+}
+.rank-no {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rank-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.rank-score {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--muted);
+}
+.rank-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(91, 140, 255, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.rank-badge.is-answer {
+  color: var(--cool);
+  background: rgba(76, 175, 114, 0.12);
+  border-color: var(--cool);
+}
+.rank-more {
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rank-more:hover { color: var(--text); border-color: var(--accent); }
+.rank-more:disabled { opacity: 0.5; cursor: default; }
+
 .share-btn {
   margin-top: 14px;
   padding: 10px 22px;
@@ -527,6 +770,32 @@ header.top .visitors {
   font-weight: 400;
   line-height: 1.6;
 }
+
+.seo-info {
+  max-width: 620px;
+  margin: 40px auto 0;
+  padding: 20px 16px 60px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.seo-info h2 {
+  color: var(--text);
+  font-size: 16px;
+  margin: 20px 0 8px;
+}
+.seo-info h3 {
+  color: var(--text);
+  font-size: 14px;
+  margin: 20px 0 8px;
+}
+.seo-info dt {
+  color: var(--text);
+  font-weight: 600;
+  margin-top: 10px;
+}
+.seo-info dd { margin: 2px 0 0; }
 
 .footer-actions { text-align: center; margin-top: 20px; }
 .footer-actions button {
