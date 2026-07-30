@@ -656,12 +656,10 @@ export default function Page() {
     if (next && rankItems.length === 0 && !rankLoading) loadMoreRanking();
   }
 
-  // 자동완성: 이미 추측한 게임은 제외 (id 기준 — 동명 다른 게임은 남김)
+  // 자동완성: 이미 추측한 게임은 제외 (id 기준 — 동명 다른 게임은 남김).
+  // 제외를 suggest에 넘겨야 8개가 전부 기추측일 때 후보가 빈 채로 남지 않는다.
   const suggestions = useMemo(
-    () =>
-      db && query
-        ? suggest(db, query, 8).filter((g) => !guessedIds.has(g.id))
-        : [],
+    () => (db && query ? suggest(db, query, 8, guessedIds) : []),
     [db, query, guessedIds],
   );
 
@@ -701,7 +699,7 @@ export default function Page() {
     }
   }
 
-  // 입력창/추측 버튼: 타이핑한 텍스트를 게임으로 해석해 제출
+  // 타이핑한 텍스트를 게임으로 해석해 제출. resolve는 정확 일치만 통과시킨다.
   function submitText(name: string) {
     setError("");
     if (!db) return;
@@ -711,6 +709,15 @@ export default function Page() {
       return;
     }
     submitGame(game);
+  }
+
+  // Enter · 추측 버튼 공용. 선택된 후보가 있으면 그 게임을 id로 직접 제출(동명 게임 구분,
+  // 초성·오타 입력도 이 경로로 통과), 없으면 텍스트를 정확 일치로 해석한다.
+  function submitCurrent() {
+    const pick = suggestions[activeIdx];
+    if (pick) submitGame(pick);
+    else submitText(query);
+    setActiveIdx(0);
   }
 
   async function getHint() {
@@ -767,11 +774,7 @@ export default function Page() {
       // 한글 IME 조합 중 발생하는 Enter(조합 확정용)는 무시 — 이중 제출 방지
       if (e.nativeEvent.isComposing || (e.nativeEvent as KeyboardEvent).keyCode === 229) return;
       e.preventDefault();
-      const pick = suggestions[activeIdx];
-      // 자동완성 선택 시 그 게임을 id로 직접 제출(동명 게임 구분), 아니면 텍스트 해석
-      if (pick) submitGame(pick);
-      else submitText(query);
-      setActiveIdx(0);
+      submitCurrent();
     }
   }
 
@@ -951,7 +954,9 @@ export default function Page() {
             <input
               ref={inputRef}
               value={query}
-              placeholder={loading ? "데이터 불러오는 중…" : "보드게임 이름 입력 (예: 카탄)"}
+              placeholder={
+                loading ? "데이터 불러오는 중…" : "보드게임 이름 · 초성 (예: 카탄, ㅋㅌ)"
+              }
               disabled={loading}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -960,7 +965,7 @@ export default function Page() {
               onKeyDown={onKeyDown}
               autoComplete="off"
             />
-            <button disabled={loading || !query} onClick={() => submitText(query)}>
+            <button disabled={loading || !query} onClick={submitCurrent}>
               추측
             </button>
             {suggestions.length > 0 && (
