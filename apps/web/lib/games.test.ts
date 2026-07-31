@@ -23,6 +23,8 @@ function db(rows: Row[]) {
       rate: null,
       bgg_id: null,
       categories: [],
+      mechanisms: [],
+      types: [],
       weight: null,
       players_min: null,
       players_max: null,

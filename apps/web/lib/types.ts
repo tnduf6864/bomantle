@@ -7,6 +7,10 @@ export interface GameMeta {
   rate: number | null;
   bgg_id: number | null;
   categories: number[];
+  /** 진행방식 태그 id (이름은 GameDB.mechanisms 사전으로 찾는다) */
+  mechanisms: number[];
+  /** 유형 태그 이름 — 보드라이프 원문 그대로라 사전 없이 바로 표시 가능 */
+  types: string[];
   weight: number | null;
   players_min: number | null;
   players_max: number | null;
@@ -117,4 +121,53 @@ export interface GuessRow extends GuessResult {
   game: GameMeta;
   /** 입력 순서(중복 강조용) */
   seq: number;
+}
+
+// --- 보들(보드게임 Wordle) --------------------------------------------------
+// 서버 워커 `bodle.ts`와 같은 형태. 정답 속성은 끝나기 전까지 절대 내려오지 않는다.
+
+export type BodleSetMark = "hit" | "partial" | "miss";
+export type BodleNumMark = "hit" | "up" | "down" | "unknown";
+
+export interface BodleFeedback {
+  types: BodleSetMark;
+  categories: BodleSetMark;
+  mechanisms: BodleSetMark;
+  weight: BodleNumMark;
+  weightNear: boolean;
+  /** weight가 "hit"이고 완전히 같은 값일 때만 true(초록 vs 노랑 표시용) */
+  weightExact: boolean;
+  /** 화살표 표시 전용 방향 — 밴드 판정(weight)과 독립적. 완전히 같으면 null. */
+  weightDir: "up" | "down" | null;
+  year: BodleNumMark;
+  yearNear: boolean;
+  /** year가 "hit"이고 완전히 같은 해일 때만 true */
+  yearExact: boolean;
+  /** weightDir과 같은 용도 — 연도 화살표. */
+  yearDir: "up" | "down" | null;
+}
+
+export interface BodleTurn {
+  gameId: number;
+  feedback: BodleFeedback;
+  correct: boolean;
+}
+
+export interface BodleToday {
+  date: string;
+  puzzleNumber: number;
+  maxGuesses: number;
+  poolSize: number;
+  /** 남은 후보 수를 보여주기 시작하는 추측 횟수 */
+  remainingFromTurn: number;
+}
+
+export interface BodleGuessResult {
+  turns: BodleTurn[];
+  solved: boolean;
+  /** 맞혔거나 시도를 다 썼음 — 이때만 answer가 온다 */
+  finished: boolean;
+  /** 단서에 맞는 남은 후보 **개수**. 목록은 주지 않는다(의도된 설계) */
+  remaining: number | null;
+  answer?: AnswerInfo;
 }

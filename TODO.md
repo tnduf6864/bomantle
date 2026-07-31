@@ -8,20 +8,12 @@
 
 ---
 
-## 1. Cloudflare 실제 배포 ⭐필수
+## 1. Cloudflare 실제 배포 ✅ 완료 (라이브)
 
-사용자 CF 계정 로그인 필요(`wrangler login`).
-
-- [ ] Worker 배포
-  - `cd workers/api`
-  - `wrangler kv namespace create ANSWERS` → 출력된 id를 `wrangler.jsonc`의 `REPLACE_WITH_KV_ID`에 입력
-  - `wrangler deploy` → 워커 도메인 확보 (예: `https://bomantle-api.<account>.workers.dev`)
-- [ ] Pages 배포
-  - `cd apps/web`
-  - `NEXT_PUBLIC_API_BASE=https://<워커도메인> pnpm build`
-  - `wrangler pages deploy out` (또는 CF 대시보드에서 out/ 연결)
-- [ ] CORS/도메인 확인 — 워커 CORS는 `*`로 열려 있음. 커스텀 도메인 쓰면 좁히기 검토.
-- [ ] 배포 후 실제 /api/guess 동작 확인.
+- [x] Worker 배포 — `bomantle-api.bomantle.workers.dev`, KV `ANSWERS` id 입력 완료
+- [x] Pages 배포 — `bomantle.pages.dev`
+- [x] CORS — `*`가 아니라 화이트리스트(`ALLOWED_ORIGINS`: Pages 운영 + localhost:3000)
+- [x] 배포 후 `/api/guess` 동작 확인
 - [x] **`ResultBoard` DO 배포 완료(2026-07-30)** — `wrangler.jsonc` migration `v2` 적용됨.
       `GET /api/stats`가 실제 집계를 반환하는 것으로 확인(백분위 카드 정상 동작).
 
@@ -133,7 +125,24 @@
 - [x] GitHub Actions `.github/workflows/ci.yml` — install → core/api typecheck+test → web build
 - [x] 워커 tsconfig에서 `*.test.ts` 제외(Node 타입 vs workers-types 분리, 배포 번들 무관)
 
-## 9. (나중) Expo 모바일 앱
+## 9. 보들(보드게임 Wordle) — 구현됨, 배포 전
+
+> 자매 게임. 설계 근거·측정치·구현 현황은 [docs/bodle-plan.md](./docs/bodle-plan.md) 참고.
+> 규칙은 `workers/api/src/bodle.ts`, 화면은 `apps/web/app/bodle/`.
+
+- [x] 순수 로직 + 테스트 19건 (피드백 판정, 요일 티어, 남은 후보 수, 입력 검증)
+- [x] 워커 라우트 4개 (`/api/bodle/today|guess|result|stats`) — `wrangler dev` 검증
+- [x] `/bodle` 페이지 — 그리드, 자동완성 재사용, 진행 복원, 공유, 오늘의 현황
+- [x] 웹 로직 테스트 11건 / SEO 메타·설명 섹션 / 보맨틀 ↔ 보들 상호 링크
+- [ ] **배포** — 워커 재배포 + Pages 재배포. `sw.js`는 이미 `bomantle-v4`로 올려둠
+- [ ] 하드 모드 (드러난 단서와 모순되는 게임 제출 차단)
+- [ ] 아카이브(지난 회차) — 신규 유입에겐 이게 재방문의 핵심
+- [ ] 실제 플레이 데이터로 `TUNING` 재검토 (6회내 성공률 실측)
+
+> ⚠️ 보들 정답 시드는 `bodle:${date}` 접두사로 보맨틀과 분리돼 있다. 이걸 빼면
+> 보맨틀 8단계 힌트가 보들 정답을 그대로 흘린다. 테스트(`bodle.test.ts`)가 지키고 있음.
+
+## 10. (나중) Expo 모바일 앱
 
 - [ ] `apps/mobile` (Expo) 추가, `packages/core` + 같은 Worker API 재사용
 - [ ] 화면은 웹 UI 이식

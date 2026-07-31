@@ -47,18 +47,21 @@ function baseName(g: Game): string {
 /**
  * 정답 후보 풀. 잘 알려지고 단독 플레이 가능한 게임만:
  *  - 랭킹/난이도/인원 데이터 존재, 태그 2개 이상
- *  - 평가 수 50개 이상 (마이너·인지도 낮은 게임 정답에서 제외)
+ *  - 평가 수 minReviews개 이상 (마이너·인지도 낮은 게임 정답에서 제외)
  *  - 같은 프랜차이즈는 가장 높은 랭킹 1개만 (아줄:신트라 등 확장 제외)
  *  - 랭킹 상위 위주(기본 1200개)
+ *
+ * `minReviews`는 보들(bodle.ts)의 요일별 난이도 티어용이다. 보맨틀은 기본값 50만 쓴다.
+ * 실측 풀 크기: 50→551개, 100→313개, 200→143개.
  */
-export function buildAnswerPool(games: Game[], limit = 1200): number[] {
+export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): number[] {
   const eligible = games.filter(
     (g) =>
       g.rank != null &&
       g.weight != null &&
       g.categories.length >= 2 &&
       g.players_min != null &&
-      (g.review_count ?? 0) >= 50,
+      (g.review_count ?? 0) >= minReviews,
   );
   // 프랜차이즈별 최상위만
   const bestByBase = new Map<string, Game>();

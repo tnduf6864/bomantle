@@ -99,6 +99,7 @@ export interface GameDB {
   games: GameMeta[];
   byId: Map<number, GameMeta>;
   categories: Record<string, string>;
+  mechanisms: Record<string, string>;
   /** 정규화 이름 -> game (정확 매칭용) */
   exact: Map<string, GameMeta>;
   /** 랭킹 오름차순. 단계별로 순서대로 담기면 결과가 그대로 랭킹순이 된다 */
@@ -111,6 +112,7 @@ const rankOf = (g: GameMeta) => g.rank ?? Number.MAX_SAFE_INTEGER;
 export function buildGameDB(
   games: GameMeta[],
   categories: Record<string, string>,
+  mechanisms: Record<string, string> = {},
 ): GameDB {
   const byId = new Map<number, GameMeta>();
   const exact = new Map<string, GameMeta>();
@@ -130,15 +132,16 @@ export function buildGameDB(
   }
 
   entries.sort((a, b) => rankOf(a.game) - rankOf(b.game));
-  return { games, byId, categories, exact, entries };
+  return { games, byId, categories, mechanisms, exact, entries };
 }
 
 export async function loadGameDB(): Promise<GameDB> {
-  const [games, categories] = await Promise.all([
+  const [games, categories, mechanisms] = await Promise.all([
     fetch("/games.json").then((r) => r.json() as Promise<GameMeta[]>),
     fetch("/categories.json").then((r) => r.json() as Promise<Record<string, string>>),
+    fetch("/mechanisms.json").then((r) => r.json() as Promise<Record<string, string>>),
   ]);
-  return buildGameDB(games, categories);
+  return buildGameDB(games, categories, mechanisms);
 }
 
 /**
@@ -198,4 +201,8 @@ export function suggest(
 
 export function categoryNames(db: GameDB, g: GameMeta): string[] {
   return g.categories.map((c) => db.categories[String(c)] ?? String(c));
+}
+
+export function mechanismNames(db: GameDB, g: GameMeta): string[] {
+  return g.mechanisms.map((m) => db.mechanisms[String(m)] ?? String(m));
 }

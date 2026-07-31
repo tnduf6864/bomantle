@@ -36,6 +36,12 @@ import {
   GUESS_BUCKETS,
   type Stats,
 } from "../lib/stats";
+// 기기 식별자는 보들과 같은 정의를 쓴다(같은 키 `bomantle:cid`).
+import { deviceId } from "../lib/bodle";
+import { FEEDBACK_URL } from "../lib/constants";
+import { RESET_HOUR, clientPuzzleDate, msUntilNextReset, formatCountdown } from "../lib/reset";
+import { AnswerCard } from "../components/AnswerCard";
+import { TodayStatsCard } from "../components/TodayStatsCard";
 
 function barColor(row: GuessRow): string {
   if (row.win) return "var(--cool)";
@@ -86,159 +92,12 @@ function buildShareText(
   return `${head}\n🏳️ 포기 — 가장 가까웠던 순위 ${best}위\n${n}번 추측${hintLine}\n\nhttps://bomantle.pages.dev`;
 }
 
-// 매일 게임이 초기화되는 시각(Asia/Seoul 기준). 백엔드 RESET_HOUR과 일치시킬 것.
-const RESET_HOUR = 9;
-
 // 전체 순위 목록을 한 번에 가져오는 개수(서버 MAX_LIMIT=200 이하).
 const RANK_PAGE = 100;
 
 // 백분위 재조회 최소 간격. 표본이 하루 내내 늘어 값이 변하지만, 탭을 자주 왕복해도
 // 요청이 몰리지 않게 막는다.
 const PCT_REFRESH_MS = 60_000;
-
-/**
- * 기기 식별자. 같은 기기의 재제출을 서버가 알아보게 하는 용도(백분위 기록 고정)로만 쓴다.
- * 임의 UUID이며 개인정보가 아니고, 서버는 이 값으로 아무것도 조회하지 않는다.
- * randomUUID가 없는(비보안 컨텍스트) 브라우저도 있어 폴백을 둔다.
- */
-function deviceId(): string | null {
-  try {
-    const key = "bomantle:cid";
-    const saved = localStorage.getItem(key);
-    if (saved) return saved;
-    const id =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
-    localStorage.setItem(key, id);
-    return id;
-  } catch {
-    return null; // 저장 불가 환경(시크릿 모드 등)은 백분위 기능만 비활성
-  }
-}
-
-// 문의·제보 구글폼. 응답은 연결된 구글 스프레드시트로 자동 수집됨.
-// 폼 생성 후 "보내기 → 링크(🔗)"의 단축 URL을 여기에 붙여넣으면 됨.
-const FEEDBACK_URL =
-  "https://docs.google.com/forms/d/e/1FAIpQLSedokjNlrAy5I6u73BgqDsAYwyjSSbZ1N2S4ndsdPCXa_pcvw/viewform";
-
-// 현재 "퍼즐 날짜"(YYYY-MM-DD). 서버 data/answer.ts의 kstDate와 동일 규칙:
-// KST에서 RESET_HOUR시만큼 당겨 날짜를 계산(오전 9시 경계). 하루 경계 감지에 사용.
-function clientPuzzleDate(now: Date = new Date()): string {
-  const shifted = new Date(now.getTime() - RESET_HOUR * 3_600_000);
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(shifted);
-}
-
-// 다음 초기화(매일 오전 RESET_HOUR시 KST)까지 남은 ms. 클라이언트 타임존과 무관하게 동작.
-function msUntilNextReset(now: Date = new Date()): number {
-  // 로컬 타임존에 KST 벽시계 값을 심은 Date — 두 Date의 차(duration)는 타임존 무관.
-  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
-  const target = new Date(kst);
-  target.setHours(RESET_HOUR, 0, 0, 0);
-  if (kst.getTime() >= target.getTime()) target.setDate(target.getDate() + 1);
-  return target.getTime() - kst.getTime();
-}
-
-function formatCountdown(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000));
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
-}
-
-/** 정답 카드 사양 목록. 값이 없는 항목은 통째로 뺀다(빈 줄 방지). */
-function answerSpecs(a: AnswerInfo): { label: string; value: string; wide?: boolean }[] {
-  const out: { label: string; value: string; wide?: boolean }[] = [];
-  const push = (label: string, value: string | null, wide = false) => {
-    if (value) out.push({ label, value, wide });
-  };
-  const players =
-    a.players_min == null
-      ? null
-      : a.players_min === a.players_max
-        ? `${a.players_min}명`
-        : `${a.players_min}-${a.players_max}명`;
-  push("출시", a.year);
-  push("인원", players && a.best_players ? `${players} (베스트 ${a.best_players}인)` : players);
-  push("플레이타임", a.time_min ? `${a.time_min}분` : null);
-  push("난이도", a.weight != null ? `${a.weight.toFixed(2)} / 5` : null);
-  push("연령", a.age != null ? `${a.age}세 이상` : null);
-  push("평점", a.rate != null ? a.rate.toFixed(1) : null);
-  push("랭킹", a.rank != null ? `보드라이프 ${a.rank}위` : null);
-  push("디자이너", a.designers.join(", ") || null, true);
-  return out;
-}
-
-/** 정답 공개 시 보여주는 게임 정보 카드(박스아트 + 사양 + 태그 + 원문 링크). */
-function AnswerCard({ info }: { info: AnswerInfo }) {
-  const specs = answerSpecs(info);
-  const url = `https://boardlife.co.kr/game/${info.id}`;
-  const caption = info.name_en ?? info.name_ko ?? "";
-  return (
-    <div className="answer-card">
-      <div className="answer-head">
-        {info.image && (
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            <img
-              className="answer-img"
-              src={info.image}
-              alt={`${info.name_ko ?? ""} 박스아트`}
-            />
-          </a>
-        )}
-        <div className="answer-title">
-          {caption && <div className="answer-en">{caption}</div>}
-          {info.types.length > 0 && (
-            <div className="answer-type">{info.types.join(" · ")}</div>
-          )}
-          <a className="answer-link-text" href={url} target="_blank" rel="noopener noreferrer">
-            보드라이프에서 보기 ↗
-          </a>
-        </div>
-      </div>
-
-      {specs.length > 0 && (
-        <dl className="answer-specs">
-          {specs.map((s) => (
-            <div className={`answer-spec ${s.wide ? "wide" : ""}`} key={s.label}>
-              <dt>{s.label}</dt>
-              <dd>{s.value}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-
-      {(info.categories.length > 0 || info.mechanisms.length > 0) && (
-        <div className="answer-tags">
-          {info.categories.length > 0 && (
-            <div className="answer-tag-row">
-              <span className="answer-tag-label">테마</span>
-              {info.categories.map((c) => (
-                <span className="tag" key={c}>
-                  {c}
-                </span>
-              ))}
-            </div>
-          )}
-          {info.mechanisms.length > 0 && (
-            <div className="answer-tag-row">
-              <span className="answer-tag-label">진행방식</span>
-              {info.mechanisms.map((m) => (
-                <span className="tag" key={m}>
-                  {m}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * 오늘 맞힌 사람 중 내 위치. 표본은 **맞힌 사람만**이므로 문구를 반드시 "맞힌 N명 중"으로
@@ -294,68 +153,6 @@ function PercentileCard({ info }: { info: PercentileResult }) {
 /** 오늘 참여자 중 맞힌 비율(%). 참여 0이면 0. */
 function todayWinRate(s: TodayStats): number {
   return s.players ? Math.round((s.solved / s.players) * 100) : 0;
-}
-
-/**
- * 오늘의 전체 현황(익명 집계). 개인 통계(localStorage)와 달리 서버 집계이고,
- * **분모에 포기까지 포함**한다 — 분포 막대는 정답자 기준이므로 라벨로 구분해 둔다.
- */
-function TodayStatsCard({ info, myBucket }: { info: TodayStats; myBucket: string | null }) {
-  const max = Math.max(1, ...GUESS_BUCKETS.map((b) => info.guessDist[b] ?? 0));
-  return (
-    <div className="today-stats">
-      <div className="dist-title">
-        🌏 오늘의 전체 현황
-        <span className="dist-note"> · 익명 집계</span>
-      </div>
-
-      {info.players === 0 ? (
-        <div className="today-empty">아직 오늘 결과를 낸 사람이 없어요. 첫 번째가 되어보세요!</div>
-      ) : (
-        <>
-          <div className="stat-grid stat-grid-3">
-            <div className="stat-cell">
-              <div className="stat-num">{info.players.toLocaleString()}</div>
-              <div className="stat-lbl">참여</div>
-            </div>
-            <div className="stat-cell">
-              <div className="stat-num">{todayWinRate(info)}%</div>
-              <div className="stat-lbl">정답률</div>
-            </div>
-            <div className="stat-cell">
-              <div className="stat-num">{info.avgGuesses || "–"}</div>
-              <div className="stat-lbl">평균 추측</div>
-            </div>
-          </div>
-
-          {info.solved > 0 && (
-            <div className="dist">
-              <div className="dist-title">
-                추측 횟수 분포
-                <span className="dist-note"> · 맞힌 {info.solved.toLocaleString()}명 기준</span>
-              </div>
-              {GUESS_BUCKETS.map((b) => {
-                const c = info.guessDist[b] ?? 0;
-                return (
-                  <div className="dist-row" key={b}>
-                    <span className="dist-lbl">{b}</span>
-                    <div className="dist-bar">
-                      <span
-                        className={`dist-fill ${b === myBucket ? "hi" : ""}`}
-                        style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
-                      >
-                        {c > 0 && <em>{c}</em>}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
 }
 
 function metaText(db: GameDB, g: GameMeta): string {
@@ -803,6 +600,7 @@ export default function Page() {
   );
 
   return (
+    <>
     <div className="wrap">
       <header className="top">
         <button
@@ -1049,6 +847,11 @@ export default function Page() {
         </div>
       )}
 
+      {/* 자매 게임 유도. 오늘 판을 끝낸 사람이 이어서 할 거리를 준다. */}
+      <a className="sister-link" href="/bodle">
+        🎲 <b>보들</b> — 다섯 단서로 오늘의 보드게임 맞히기 →
+      </a>
+
       <footer className="site-footer">
         <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
           💬 문의·제보
@@ -1219,5 +1022,43 @@ export default function Page() {
         </div>
       )}
     </div>
+
+    {/* 정적 서버 렌더 콘텐츠 — 클라 렌더 전에도 검색엔진이 읽을 수 있는 실제 텍스트 */}
+    <section className="seo-info">
+      <h2>보맨틀이란?</h2>
+      <p>
+        보맨틀은 매일 하나의 보드게임을 맞히는 무료 웹게임입니다. 정답 보드게임을
+        추측하면 카테고리·테마·난이도·인원수 등을 기준으로 계산한 유사도 점수를
+        알려주고, 그 점수를 힌트 삼아 점점 정답에 가까운 보드게임을 찾아가는 방식입니다.
+        영어 단어 맞히기 게임 꼬맨틀(Semantle)의 보드게임 버전이라고 보면 됩니다.
+      </p>
+      <h3>자주 묻는 질문</h3>
+      <dl>
+        <dt>새 문제는 언제 나오나요?</dt>
+        <dd>매일 한국 시간(KST) 오전 9시에 새로운 보드게임 문제로 초기화됩니다.</dd>
+        <dt>점수는 어떻게 계산되나요?</dt>
+        <dd>
+          보드게임의 카테고리·테마 태그와 난이도·인원·플레이타임 등 수치 정보를
+          결합한 유사도 엔진으로 계산합니다. 정답과 비슷한 보드게임일수록 높은
+          점수와 순위를 얻습니다.
+        </dd>
+        <dt>힌트는 어떻게 쓰나요?</dt>
+        <dd>
+          한 문제당 최대 8단계 힌트(박스아트 제외)를 순서대로 열람할 수 있으며,
+          힌트를 많이 볼수록 결과 공유 시 표시됩니다.
+        </dd>
+        <dt>정답을 찾을 자신이 없으면요?</dt>
+        <dd>포기 버튼으로 언제든 정답을 확인하고 다음 날 새 문제로 넘어갈 수 있습니다.</dd>
+        <dt>보들은 뭔가요?</dt>
+        <dd>
+          같은 데이터로 만든 자매 게임입니다. 유사도 점수 대신 유형·테마·진행방식·무게·
+          출시연도 다섯 가지 단서로 오늘의 보드게임을 8번 안에 맞히는 워들(Wordle) 방식입니다.
+        </dd>
+      </dl>
+      <p>
+        <a href="/bodle">보들 하러 가기 →</a>
+      </p>
+    </section>
+    </>
   );
 }

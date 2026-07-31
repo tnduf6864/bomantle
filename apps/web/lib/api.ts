@@ -1,5 +1,7 @@
 import type {
   AnswerInfo,
+  BodleGuessResult,
+  BodleToday,
   GuessResult,
   HintData,
   PercentileResult,
@@ -79,4 +81,49 @@ export async function fetchGiveup(): Promise<{ answer: AnswerInfo }> {
   const r = await fetch(`${BASE}/api/giveup`, { method: "POST" });
   if (!r.ok) throw new Error("giveup failed");
   return r.json();
+}
+
+// --- 보들 -------------------------------------------------------------------
+
+export async function fetchBodleToday(): Promise<BodleToday> {
+  const r = await fetch(`${BASE}/api/bodle/today`);
+  if (!r.ok) throw new Error("bodle today failed");
+  return r.json();
+}
+
+/**
+ * 추측 **전체 목록**을 보내고 열별 피드백을 전부 돌려받는다.
+ * 클라는 id 목록만 저장하면 되고 새로고침 복원도 같은 호출로 끝난다.
+ */
+export async function fetchBodleGuess(guesses: number[]): Promise<BodleGuessResult> {
+  const r = await fetch(`${BASE}/api/bodle/guess`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ guesses }),
+  });
+  if (!r.ok) throw new Error("bodle guess failed");
+  return r.json();
+}
+
+/** 보들 결과 제출. 힌트 개념이 없어 hints는 항상 0. */
+export async function fetchBodleResult(
+  cid: string,
+  guesses: number,
+  solved: boolean,
+): Promise<PercentileResult | null> {
+  const r = await fetch(`${BASE}/api/bodle/result`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cid, hints: 0, guesses, solved }),
+  });
+  if (!r.ok) throw new Error("bodle result failed");
+  const data = (await r.json()) as PercentileResult | { available: false };
+  return "available" in data ? null : data;
+}
+
+export async function fetchBodleStats(): Promise<TodayStats | null> {
+  const r = await fetch(`${BASE}/api/bodle/stats`);
+  if (!r.ok) throw new Error("bodle stats failed");
+  const data = (await r.json()) as TodayStats | { available: false };
+  return "available" in data ? null : data;
 }

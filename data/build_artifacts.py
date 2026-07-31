@@ -15,9 +15,11 @@ FULL = (
     "types", "designers", "image",
 )
 # 슬림 버전: 클라이언트(자동완성 + 추측 행 메타 표시)용. 정답 전용 힌트 필드 제외.
+# types·mechanisms는 보들 그리드가 "추측한 게임의 실제 유형/진행방식"을 보여주는 데 쓴다.
 SLIM = (
     "id", "name_ko", "name_en", "year", "rank", "rate", "bgg_id",
-    "categories", "weight", "players_min", "players_max", "time_min", "age",
+    "categories", "mechanisms", "types",
+    "weight", "players_min", "players_max", "time_min", "age",
 )
 
 full = [{k: g[k] for k in FULL} for g in clean]
@@ -37,7 +39,7 @@ print("categories:", len(catnames), "| mechanisms:", len(mechnames))
 #   games.json      → 워커(엔진+힌트+큐레이션, 풀 버전)
 #   games.web.json  → 웹 public/games.json (자동완성·표시용 슬림 버전)
 #   categories.json → 워커 + 웹 양쪽
-#   mechanisms.json → 워커(힌트용)
+#   mechanisms.json → 워커(힌트용) + 웹(보들 그리드 표시용)
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKER = os.path.join(ROOT, "workers", "api", "src")
 WEB = os.path.join(ROOT, "apps", "web", "public")
@@ -47,6 +49,7 @@ DIST = [
     ("out/categories.json", os.path.join(WORKER, "categories.json")),
     ("out/categories.json", os.path.join(WEB, "categories.json")),
     ("out/mechanisms.json", os.path.join(WORKER, "mechanisms.json")),
+    ("out/mechanisms.json", os.path.join(WEB, "mechanisms.json")),
 ]
 print("\n배포(복사):")
 for src, dst in DIST:
