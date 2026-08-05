@@ -95,30 +95,63 @@ test("월요일 풀도 한 달 이상 돌 만큼은 된다", () => {
 
 // --- 피드백 ---------------------------------------------------------------
 
-test("집합 열: 완전 일치 hit, 임계 이상 겹치면 partial, 아니면 miss", () => {
+test("집합 열: 내 태그가 전부 있으면 hit, 일부면 partial, 없으면 miss", () => {
   const base = { weight: 3, year: "2018" };
   const g = (categories: number[]) => mk({ ...base, categories });
 
   assert.equal(compareBodle(g([1, 2, 3]), g([1, 2, 3])).categories, "hit");
-  // 임계 2 — 2개 겹치면 partial
+  // 내 태그가 전부 정답에도 있으면 정답이 더 갖고 있어도 hit
+  assert.equal(compareBodle(g([1, 2]), g([1, 2, 3])).categories, "hit");
   assert.equal(compareBodle(g([1, 2, 9]), g([1, 2, 3])).categories, "partial");
-  // 1개만 겹치면 miss (임계 미달)
-  assert.equal(compareBodle(g([1, 8, 9]), g([1, 2, 3])).categories, "miss");
+  // 1개만 겹쳐도 partial — 예전 임계 2에서는 miss로 뭉개졌다
+  assert.equal(compareBodle(g([1, 8, 9]), g([1, 2, 3])).categories, "partial");
   assert.equal(compareBodle(g([7, 8, 9]), g([1, 2, 3])).categories, "miss");
 });
 
-test("유형은 하나만 겹쳐도 partial (원소가 1~2개뿐)", () => {
-  assert.equal(TUNING.typesThreshold, 1);
+test("집합 열: 겹친 태그를 그대로 돌려준다 (추측한 순서 유지)", () => {
+  const g = (categories: number[]) => mk({ categories });
+  const fb = compareBodle(g([9, 3, 7, 1]), g([1, 2, 3]));
+  assert.deepEqual(fb.categoriesHit, [3, 1]); // 내가 낸 순서대로
+  assert.equal(fb.categories, "partial");
+
+  // 하나도 안 겹치면 빈 배열
+  assert.deepEqual(compareBodle(g([7, 8]), g([1, 2])).categoriesHit, []);
+  // 비교 불가(unknown)도 빈 배열
+  assert.deepEqual(compareBodle(mk({}), g([1, 2])).categoriesHit, []);
+});
+
+test("겹친 태그 목록에는 내가 내지 않은 정답 태그가 절대 들어가지 않는다", () => {
+  const fb = compareBodle(
+    mk({ types: ["전략게임"], categories: [1], mechanisms: [5] }),
+    mk({ types: ["전략게임", "가족게임"], categories: [1, 2, 3], mechanisms: [5, 6] }),
+  );
+  assert.deepEqual(fb.typesHit, ["전략게임"]);
+  assert.deepEqual(fb.categoriesHit, [1]);
+  assert.deepEqual(fb.mechanismsHit, [5]);
+});
+
+test("유형: 원소가 1~2개뿐이라 하나만 겹쳐도 partial", () => {
   const a = mk({ types: ["전략게임", "가족게임"] });
   const b = mk({ types: ["전략게임"] });
-  assert.equal(compareBodle(a, b).types, "partial");
+  assert.equal(compareBodle(a, b).types, "partial"); // 가족게임은 정답에 없음
+  assert.equal(compareBodle(b, a).types, "hit"); // 내 태그(전략게임)는 전부 있음
   assert.equal(compareBodle(b, b).types, "hit");
   assert.equal(compareBodle(mk({ types: ["파티게임"] }), b).types, "miss");
 });
 
-test("빈 집합은 hit이 아니라 miss (정보 없음)", () => {
-  assert.equal(compareBodle(mk({}), mk({})).categories, "miss");
-  assert.equal(compareBodle(mk({}), mk({})).mechanisms, "miss");
+test("빈 집합은 hit도 miss도 아닌 unknown (비교 불가)", () => {
+  assert.equal(compareBodle(mk({}), mk({})).categories, "unknown");
+  assert.equal(compareBodle(mk({}), mk({})).mechanisms, "unknown");
+});
+
+test("한쪽만 태그가 없어도 unknown — 정답에 없으면 어떤 추측도 판정될 수 없다", () => {
+  const tagged = mk({ categories: [1, 2, 3], mechanisms: [4, 5] });
+  const bare = mk({});
+  // 정답에 태그가 없는 경우
+  assert.equal(compareBodle(tagged, bare).categories, "unknown");
+  // 추측한 게임에 태그가 없는 경우
+  assert.equal(compareBodle(bare, tagged).categories, "unknown");
+  assert.equal(compareBodle(bare, tagged).mechanisms, "unknown");
 });
 
 test("무게: 밴드 안이면 hit, 밖이면 up/down + 근접 표시", () => {
@@ -149,13 +182,13 @@ test("무게: hit이어도 완전히 같은 값이 아니면 weightExact는 fals
   assert.equal(compareBodle(w(2.0), w(3.0)).weightExact, false);
 });
 
-test("연도: 같은 연대면 hit, 아니면 up/down + 연대 경계 근접", () => {
+test("연도: 해 차 밴드 안이면 hit, 밖이면 up/down + 근접 표시", () => {
   const y = (year: string) => mk({ year });
-  assert.equal(compareBodle(y("2011"), y("2018")).year, "hit"); // 둘 다 2010년대
-  // 연대는 다르지만 2년 차 → 근접
-  const near = compareBodle(y("2019"), y("2021"));
+  assert.equal(compareBodle(y("2014"), y("2018")).year, "hit"); // 4년 차 <= 5
+  // 밴드 밖, 정답이 더 최근 → up
+  const near = compareBodle(y("2012"), y("2019"));
   assert.equal(near.year, "up");
-  assert.equal(near.yearNear, true);
+  assert.equal(near.yearNear, true); // 7년 차 <= 8
   // 멀면 근접 아님
   const far = compareBodle(y("2005"), y("2021"));
   assert.equal(far.year, "up");
@@ -163,9 +196,19 @@ test("연도: 같은 연대면 hit, 아니면 up/down + 연대 경계 근접", (
   assert.equal(compareBodle(y("2021"), y("2005")).year, "down");
 });
 
+test("연도: 연대 경계에서 근접도가 뒤집히지 않는다", () => {
+  const y = (year: string) => mk({ year });
+  // 정답 2019 기준 — 2년 차가 9년 차보다 반드시 가깝게 판정돼야 한다.
+  const close = compareBodle(y("2021"), y("2019")); // 2년 차, 연대는 다름
+  const farInSameDecade = compareBodle(y("2010"), y("2019")); // 9년 차, 예전 규칙이면 hit
+  assert.equal(close.year, "hit");
+  assert.equal(farInSameDecade.year, "up");
+  assert.equal(farInSameDecade.yearNear, false); // 9년 차는 근접(<=8)에도 못 든다
+});
+
 test("연도: hit이어도 완전히 같은 해가 아니면 yearExact는 false", () => {
   const y = (year: string) => mk({ year });
-  const near = compareBodle(y("2011"), y("2018")); // 같은 연대, 다른 해
+  const near = compareBodle(y("2014"), y("2018")); // 밴드 안, 다른 해
   assert.equal(near.year, "hit");
   assert.equal(near.yearExact, false);
   const exact = compareBodle(y("2018"), y("2018"));
@@ -192,10 +235,10 @@ test("weightDir/yearDir: 밴드(hit) 안이어도 완전히 같지 않으면 방
 
 test("yearDir: 밴드(hit) 안이어도 완전히 같지 않으면 방향을 알려준다", () => {
   const y = (year: string) => mk({ year });
-  const up = compareBodle(y("2011"), y("2018")); // 같은 연대, 정답이 더 최근
+  const up = compareBodle(y("2014"), y("2018")); // 밴드 안, 정답이 더 최근
   assert.equal(up.year, "hit");
   assert.equal(up.yearDir, "up");
-  const down = compareBodle(y("2018"), y("2011"));
+  const down = compareBodle(y("2018"), y("2014"));
   assert.equal(down.year, "hit");
   assert.equal(down.yearDir, "down");
   assert.equal(compareBodle(y("2018"), y("2018")).yearDir, null);

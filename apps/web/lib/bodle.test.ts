@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { BodleFeedback, BodleTurn } from "./types.ts";
 import {
+  bodleAvgGuesses,
+  bodleBestGuesses,
+  bodleWinRate,
   buildBodleShareText,
   effectiveBodleStreak,
   emptyBodleStats,
@@ -121,4 +124,22 @@ test("표시용 연속 기록: 오래된 기록은 0으로 보정", () => {
   assert.equal(effectiveBodleStreak(s, "2026-08-01"), 1); // 오늘
   assert.equal(effectiveBodleStreak(s, "2026-08-02"), 1); // 어제까지는 유효
   assert.equal(effectiveBodleStreak(s, "2026-08-03"), 0); // 끊김
+});
+
+test("요약 지표: 정답률·평균·베스트는 맞힌 판만 센다", () => {
+  let s = emptyBodleStats();
+  s = recordBodleResult(s, "2026-08-01", 3, true);
+  s = recordBodleResult(s, "2026-08-02", 6, true);
+  s = recordBodleResult(s, "2026-08-03", 8, false); // 실패 — 분포에 안 들어감
+
+  assert.equal(bodleWinRate(s), 67); // 2/3
+  assert.equal(bodleAvgGuesses(s), 4.5); // (3+6)/2, 실패는 분모 밖
+  assert.equal(bodleBestGuesses(s), 3);
+});
+
+test("요약 지표: 기록이 없으면 0·null", () => {
+  const s = emptyBodleStats();
+  assert.equal(bodleWinRate(s), 0);
+  assert.equal(bodleAvgGuesses(s), 0);
+  assert.equal(bodleBestGuesses(s), null);
 });

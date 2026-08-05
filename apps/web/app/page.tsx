@@ -42,6 +42,8 @@ import { FEEDBACK_URL } from "../lib/constants";
 import { RESET_HOUR, clientPuzzleDate, msUntilNextReset, formatCountdown } from "../lib/reset";
 import { AnswerCard } from "../components/AnswerCard";
 import { TodayStatsCard } from "../components/TodayStatsCard";
+import { PercentileCard, TodaySummaryCard } from "../components/PercentileCard";
+import { DistBars } from "../components/DistBars";
 
 function barColor(row: GuessRow): string {
   if (row.win) return "var(--cool)";
@@ -99,60 +101,13 @@ const RANK_PAGE = 100;
 // 요청이 몰리지 않게 막는다.
 const PCT_REFRESH_MS = 60_000;
 
-/**
- * 오늘 맞힌 사람 중 내 위치. 표본은 **맞힌 사람만**이므로 문구를 반드시 "맞힌 N명 중"으로
- * 쓴다(포기자를 포함한 것처럼 읽히면 수치가 거짓이 된다).
- */
-function PercentileCard({ info }: { info: PercentileResult }) {
-  if (info.pending) {
-    return (
-      <div className="pct">
-        <div className="pct-pending">
-          🏆 아직 집계 중 · 오늘 {info.total}명이 맞혔어요
-          <div className="pct-note">몇 명 더 맞히면 상위 %가 표시돼요</div>
-        </div>
-      </div>
-    );
-  }
-
-  const maxHint = Math.max(1, ...info.hintDist);
-  return (
-    <div className="pct">
-      <div className="pct-head">
-        상위 <b>{info.percentile}%</b>
-      </div>
-      <div className="pct-bar">
-        <span className="pct-fill" style={{ width: `${info.percentile}%` }} />
-        <span className="pct-marker" style={{ left: `${info.percentile}%` }} />
-      </div>
-      <div className="pct-note">
-        오늘 맞힌 {info.total.toLocaleString()}명 중 <b>{info.rank.toLocaleString()}위</b> · 힌트{" "}
-        {info.hints}개 · {info.guesses}번 추측
-      </div>
-
-      <div className="pct-dist">
-        <div className="dist-title">힌트 개수별 정답자</div>
-        {info.hintDist.map((c, h) => (
-          <div className="dist-row" key={h}>
-            <span className="dist-lbl">{h}개</span>
-            <div className="dist-bar">
-              <span
-                className={`dist-fill ${h === info.hints ? "hi" : ""}`}
-                style={{ width: `${c ? Math.max(12, (c / maxHint) * 100) : 0}%` }}
-              >
-                {c > 0 && <em>{c}</em>}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** 오늘 참여자 중 맞힌 비율(%). 참여 0이면 0. */
-function todayWinRate(s: TodayStats): number {
-  return s.players ? Math.round((s.solved / s.players) * 100) : 0;
+/** 백분위 카드에 붙일 힌트 개수별 정답자 분포(보들은 추측 횟수별을 쓴다). */
+function hintDistRows(info: PercentileResult) {
+  return info.hintDist.map((c, h) => ({
+    label: `${h}개`,
+    count: c,
+    mine: h === info.hints,
+  }));
 }
 
 function metaText(db: GameDB, g: GameMeta): string {
@@ -633,31 +588,32 @@ export default function Page() {
           {rows.some((r) => r.win) ? (
             <>
               🎉 정답은 <b>{answer}</b>!
-              <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
+              <div className="banner-sub">
                 {rows.length}번 만에 맞혔어요 · 매일 오전 9시 새 문제로 다시 만나요
               </div>
             </>
           ) : (
             <>
               정답은 <b>{answer}</b> 였어요.
-              <div style={{ color: "var(--muted)", fontSize: 13, marginTop: 6 }}>
+              <div className="banner-sub">
                 {rows.length}번 추측 후 포기 · 매일 오전 9시 새 문제로 다시 만나요
               </div>
             </>
           )}
-          {pct && rows.some((r) => r.win) && <PercentileCard info={pct} />}
+          {pct && rows.some((r) => r.win) && (
+            <PercentileCard
+              info={pct}
+              detail={`힌트 ${pct.hints}개 · ${pct.guesses}번 추측`}
+              dist={{ title: "힌트 개수별 정답자", rows: hintDistRows(pct) }}
+            />
+          )}
           {/* 포기한 사람에겐 백분위가 없다(표본이 정답자뿐). 대신 전체 현황을 보여준다. */}
           {!rows.some((r) => r.win) && todayStats && todayStats.players > 0 && (
-            <div className="pct">
-              <div className="pct-pending">
-                🌏 오늘 {todayStats.players.toLocaleString()}명 중{" "}
-                <b>{todayStats.solved.toLocaleString()}명</b>이 맞혔어요
-                <div className="pct-note">
-                  정답률 {todayWinRate(todayStats)}%
-                  {todayStats.avgGuesses > 0 && ` · 평균 ${todayStats.avgGuesses}번 추측`}
-                </div>
-              </div>
-            </div>
+            <TodaySummaryCard
+              players={todayStats.players}
+              solved={todayStats.solved}
+              avgGuesses={todayStats.avgGuesses}
+            />
           )}
           {answerInfo && <AnswerCard info={answerInfo} />}
 
@@ -920,35 +876,16 @@ export default function Page() {
                   </div>
                 </div>
 
-                <div className="dist">
-                  <div className="dist-title">
-                    추측 횟수 분포
-                    {giveups(stats) > 0 && (
-                      <span className="dist-note"> · 포기 {giveups(stats)}회</span>
-                    )}
-                  </div>
-                  {(() => {
-                    const max = Math.max(1, ...GUESS_BUCKETS.map((b) => stats.dist[b] ?? 0));
-                    const hi =
-                      won && rows.some((r) => r.win) ? bucketOf(rows.length) : null;
-                    return GUESS_BUCKETS.map((b) => {
-                      const c = stats.dist[b] ?? 0;
-                      return (
-                        <div className="dist-row" key={b}>
-                          <span className="dist-lbl">{b}</span>
-                          <div className="dist-bar">
-                            <span
-                              className={`dist-fill ${b === hi ? "hi" : ""}`}
-                              style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
-                            >
-                              {c > 0 && <em>{c}</em>}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
+                <DistBars
+                  title="추측 횟수 분포"
+                  note={giveups(stats) > 0 ? `포기 ${giveups(stats)}회` : undefined}
+                  rows={GUESS_BUCKETS.map((b) => ({
+                    label: b,
+                    count: stats.dist[b] ?? 0,
+                    mine:
+                      won && rows.some((r) => r.win) ? b === bucketOf(rows.length) : false,
+                  }))}
+                />
               </>
             )}
 
@@ -1052,7 +989,7 @@ export default function Page() {
         <dt>보들은 뭔가요?</dt>
         <dd>
           같은 데이터로 만든 자매 게임입니다. 유사도 점수 대신 유형·테마·진행방식·무게·
-          출시연도 다섯 가지 단서로 오늘의 보드게임을 8번 안에 맞히는 워들(Wordle) 방식입니다.
+          출시연도 다섯 가지 단서로 오늘의 보드게임을 6번 안에 맞히는 워들(Wordle) 방식입니다.
         </dd>
       </dl>
       <p>

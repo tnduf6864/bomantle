@@ -26,6 +26,9 @@ import {
   fetchBodleToday,
 } from "../../lib/api";
 import {
+  bodleAvgGuesses,
+  bodleBestGuesses,
+  bodleWinRate,
   buildBodleShareText,
   deviceId,
   effectiveBodleStreak,
@@ -40,6 +43,8 @@ import { FEEDBACK_URL } from "../../lib/constants";
 import { msUntilNextReset, formatCountdown } from "../../lib/reset";
 import { AnswerCard } from "../../components/AnswerCard";
 import { TodayStatsCard } from "../../components/TodayStatsCard";
+import { PercentileCard, TodaySummaryCard } from "../../components/PercentileCard";
+import { DistBars } from "../../components/DistBars";
 import type { GuessBucket } from "../../lib/stats";
 
 /** 그리드 열. **순서는 공유 이모지(lib/bodle.ts turnEmoji)와 반드시 같아야 한다.** */
@@ -53,20 +58,19 @@ const COLS = [
 
 type TagKey = "types" | "categories" | "mechanisms";
 
+/** 태그 열만. 단서판은 이 세 열만 다룬다(무게·연도는 값이라 칩이 될 수 없다). */
+const TAG_COLS = COLS.filter((c) => c.key !== "weight" && c.key !== "year") as readonly {
+  key: TagKey;
+  label: string;
+}[];
+
 const ARROW: Record<"up" | "down", string> = { up: "▲", down: "▼" };
 
-// 보들 개인 통계용 버킷(최대 8회라 앞쪽 3개만 의미 있음) — 서버 집계도 같은 라벨을 쓴다.
-const BODLE_BUCKETS: readonly GuessBucket[] = ["1-3", "4-6", "7-10"];
+// 보들 개인 통계용 버킷(최대 6회라 앞쪽 2개면 충분) — 서버 집계도 같은 라벨을 쓴다.
+const BODLE_BUCKETS: readonly GuessBucket[] = ["1-3", "4-6"];
 
 function bodleBucket(n: number): GuessBucket {
-  if (n <= 3) return "1-3";
-  if (n <= 6) return "4-6";
-  return "7-10";
-}
-
-/** 정답률(%). 플레이 0이면 0. */
-function bodleWinRate(s: BodleStats): number {
-  return s.played ? Math.round((s.solved / s.played) * 100) : 0;
+  return n <= 3 ? "1-3" : "4-6";
 }
 
 /** 데이터가 없을 때 공통으로 쓰는 표시 문구. "?"는 표시가 아니라 오류처럼 보여서 바꿨다. */
@@ -79,20 +83,32 @@ function numText(key: "weight" | "year", g: GameMeta | undefined): string {
   return g.year ?? NO_DATA;
 }
 
-/** 집합 열(유형·테마·진행방식)에 곁들일 추측한 게임의 실제 태그 이름. */
-function tagNames(db: GameDB | null, g: GameMeta | undefined, key: TagKey): string[] {
-  if (!db || !g) return [];
-  if (key === "types") return g.types;
-  if (key === "categories") return categoryNames(db, g);
-  return mechanismNames(db, g);
+/** 추측한 게임의 태그 하나. `hit`이면 정답에도 있는 것으로 확인된 태그. */
+interface TagChip {
+  name: string;
+  hit: boolean;
 }
 
-/** 셀 안에 넣을 짧은 표시 문자열. 태그가 많으면 앞 2개 + "+N"만 보여준다(칸이 좁다). */
-function tagText(names: string[]): string {
-  if (names.length === 0) return NO_DATA;
-  const shown = names.slice(0, 2);
-  const rest = names.length - shown.length;
-  return shown.join(" · ") + (rest > 0 ? ` +${rest}` : "");
+/**
+ * 추측한 게임의 태그를 **원래 순서 그대로** 이름 + 판정 쌍으로 만든다.
+ * 서버가 내려주는 `*Hit`은 교집합(내가 낸 것 중 정답에도 있는 것)이라, 여기서
+ * 원본 태그와 대조해 칩 단위 판정을 만든다.
+ */
+function tagChips(
+  db: GameDB | null,
+  g: GameMeta | undefined,
+  key: TagKey,
+  fb: BodleFeedback,
+): TagChip[] {
+  if (!db || !g) return [];
+  const raw: (number | string)[] =
+    key === "types" ? g.types : key === "categories" ? g.categories : g.mechanisms;
+  const names =
+    key === "types" ? g.types : key === "categories" ? categoryNames(db, g) : mechanismNames(db, g);
+  const hitSet = new Set<number | string>(
+    key === "types" ? fb.typesHit : key === "categories" ? fb.categoriesHit : fb.mechanismsHit,
+  );
+  return raw.map((v, i) => ({ name: names[i] ?? String(v), hit: hitSet.has(v) }));
 }
 
 /**
@@ -138,7 +154,9 @@ export default function BodlePage() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+  // 단서판의 "없음" 목록은 금방 수십 개가 되므로 기본은 접어 둔다.
+  const [showNoClues, setShowNoClues] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   // 결과 제출은 하루 한 번이면 충분하다(서버도 멱등). 재렌더로 중복 호출되지 않게 막는다.
@@ -226,7 +244,13 @@ export default function BodlePage() {
 
   const submitGame = useCallback(
     async (g: GameMeta) => {
-      if (!today || finished || busy || guessedIds.has(g.id)) return;
+      if (!today || finished || busy) return;
+      // 이미 쓴 게임은 조용히 무시하면 "추측 버튼이 먹통"으로 읽힌다. 자동완성에서는
+      // 빠지지만 이름을 끝까지 타이핑하면 여기로 들어온다.
+      if (guessedIds.has(g.id)) {
+        setError(`이미 추측한 게임이에요: ${g.name_ko ?? g.name_en}`);
+        return;
+      }
       setBusy(true);
       setError("");
       const ids = [...turns.map((t) => t.gameId), g.id];
@@ -265,6 +289,15 @@ export default function BodlePage() {
       e.preventDefault();
       setActiveIdx((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
+      /*
+       * 한글 IME 조합 중 발생하는 Enter(마지막 글자 확정용)는 무시한다.
+       * 이걸 빼면 "카탄"을 치고 Enter를 누르는 순간 조합 확정 Enter가 그대로 제출로
+       * 넘어가 **의도하지 않은 자동완성 1번 후보**가 나간다. 시도가 6번뿐이라
+       * 되돌릴 수 없는 손실이다(보맨틀 page.tsx의 같은 가드).
+       */
+      if (e.nativeEvent.isComposing || (e.nativeEvent as unknown as KeyboardEvent).keyCode === 229) {
+        return;
+      }
       e.preventDefault();
       submitCurrent();
     }
@@ -281,11 +314,11 @@ export default function BodlePage() {
     );
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
     } catch {
-      setError("클립보드 복사에 실패했어요.");
+      setShareMsg("복사가 안 됐어요. 텍스트를 길게 눌러 복사해주세요.");
     }
+    setTimeout(() => setShareMsg(""), 3000);
   };
 
   /** 통계 모달 열기. 아직 오늘 전체 현황을 안 받아왔으면 함께 받아온다. */
@@ -300,6 +333,44 @@ export default function BodlePage() {
     }
   }
 
+  /**
+   * 지금까지 한 번도 판정되지 않은 열. 정답에 그 값이 없으면 무슨 게임을 넣어도 영원히
+   * 판정 불가라, 알려주지 않으면 "내가 계속 빗나간다"고 오해하며 시도를 낭비한다.
+   */
+  const deadCols = useMemo(
+    () =>
+      turns.length === 0
+        ? []
+        : COLS.filter((c) => turns.every((t) => t.feedback[c.key] === "unknown")),
+    [turns],
+  );
+
+  /**
+   * 누적 단서판 — 워들의 키보드에 해당한다. 격자는 "무엇을 냈는지"의 기록이고,
+   * 지금까지 **알아낸 것**은 여기 모인다. 태그를 여러 번 냈어도 한 번만 나온다.
+   */
+  const clues = useMemo(() => {
+    const yes = new Map<string, { col: string; name: string }>();
+    const no = new Map<string, { col: string; name: string }>();
+    for (const t of turns) {
+      const g = db?.byId.get(t.gameId);
+      for (const c of TAG_COLS) {
+        for (const chip of tagChips(db, g, c.key, t.feedback)) {
+          const k = `${c.key}:${chip.name}`;
+          (chip.hit ? yes : no).set(k, { col: c.label, name: chip.name });
+        }
+      }
+    }
+    // 같은 태그가 양쪽에 들어갈 일은 없지만, 들어간다면 "있음"이 진실이다.
+    for (const k of yes.keys()) no.delete(k);
+    const group = (m: Map<string, { col: string; name: string }>) =>
+      TAG_COLS.map((c) => ({
+        label: c.label,
+        names: [...m.values()].filter((v) => v.col === c.label).map((v) => v.name),
+      })).filter((row) => row.names.length > 0);
+    return { yes: group(yes), no: group(no), noCount: no.size };
+  }, [turns, db]);
+
   const left = today ? today.maxGuesses - turns.length : 0;
   const streak = today ? effectiveBodleStreak(stats, today.date) : 0;
   const myBucket = finished && solved ? bodleBucket(turns.length) : null;
@@ -311,9 +382,11 @@ export default function BodlePage() {
         <button className="stats-open" onClick={openStats} aria-label="통계 보기" title="통계">
           📊
         </button>
-        <h1>🎲 보들</h1>
+        <h1>보들 🎲</h1>
         <div className="sub">
-          {today ? `#${today.puzzleNumber} · 오늘의 보드게임을 ${today.maxGuesses}번 안에` : "불러오는 중…"}
+          {today
+            ? `#${today.puzzleNumber} · 다섯 단서로 오늘의 보드게임을 ${today.maxGuesses}번 안에`
+            : "불러오는 중…"}
         </div>
         {countdown && (
           <div className="reset-info">
@@ -322,10 +395,29 @@ export default function BodlePage() {
           </div>
         )}
         {today && (
-          <div className="bodle-progress">
-            후보 <b>{today.poolSize}</b>개 · 남은 시도 <b>{Math.max(0, left)}</b>번
-            {streak >= 2 && <> · 🔥 연속 <b>{streak}</b>일</>}
-          </div>
+          <>
+            {/* 남은 시도를 한눈에 — 숫자보다 칸이 줄어드는 게 압박감이 산다(워들식). */}
+            <div
+              className="bodle-tries"
+              role="img"
+              aria-label={`${today.maxGuesses}번 중 ${turns.length}번 사용`}
+            >
+              {Array.from({ length: today.maxGuesses }, (_, i) => (
+                <span
+                  key={i}
+                  className={`pip ${
+                    i < turns.length ? (turns[i]?.correct ? "hit" : "used") : ""
+                  }`}
+                />
+              ))}
+            </div>
+            <div className="bodle-progress">
+              후보 <b>{today.poolSize}</b>개
+              {/* 끝난 판에서 "남은 시도"는 의미가 없다 — 칸(pip)만 결과로 남긴다. */}
+              {!finished && <> · 남은 시도 <b>{Math.max(0, left)}</b>번</>}
+              {streak >= 2 && <> · 🔥 연속 <b>{streak}</b>일</>}
+            </div>
+          </>
         )}
       </header>
 
@@ -376,8 +468,83 @@ export default function BodlePage() {
         </div>
       )}
 
+      {/*
+        누적 단서판 — 이 게임의 "키보드". 격자는 기록이고, 다음 추측을 고를 때 실제로
+        보는 건 여기다. 좁은 칸에 다 못 넣던 태그를 전부 보여주므로 모바일에서도 읽힌다.
+      */}
+      {turns.length > 0 && (clues.yes.length > 0 || clues.noCount > 0) && (
+        <div className="clues">
+          <div className="clues-title">지금까지 알아낸 것</div>
+
+          {clues.yes.length > 0 ? (
+            clues.yes.map((row) => (
+              <div className="clue-row" key={`y-${row.label}`}>
+                <span className="clue-lbl">✓ {row.label}</span>
+                <span className="clue-chips">
+                  {row.names.map((n) => (
+                    <span className="chip yes" key={n}>
+                      {n}
+                    </span>
+                  ))}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="clue-empty">아직 정답에 있는 걸로 확인된 태그가 없어요.</div>
+          )}
+
+          {clues.noCount > 0 && (
+            <div className="clue-no">
+              <button
+                className="clue-toggle"
+                onClick={() => setShowNoClues((v) => !v)}
+                aria-expanded={showNoClues}
+              >
+                {showNoClues ? "▲" : "▼"} 정답에 없는 걸로 확인된 태그 {clues.noCount}개
+              </button>
+              {showNoClues &&
+                clues.no.map((row) => (
+                  <div className="clue-row" key={`n-${row.label}`}>
+                    <span className="clue-lbl">✗ {row.label}</span>
+                    <span className="clue-chips">
+                      {row.names.map((n) => (
+                        <span className="chip no" key={n}>
+                          {n}
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {turns.length > 0 && (
         <div className="bodle-grid">
+          {/* 색 범례 — 칸 색이 무슨 뜻인지 페이지 안에서 바로 읽히게. FAQ까지 내려가지 않아도 된다. */}
+          <div className="bodle-legend">
+            <span>
+              <i className="hit" />내 태그 전부 있음
+            </span>
+            <span>
+              <i className="partial" />
+              일부 있음
+            </span>
+            <span>
+              <i className="miss" />
+              없음
+            </span>
+            <span>
+              <i className="near" />
+              아깝게
+            </span>
+            <span>
+              <i className="unknown" />
+              판정 불가
+            </span>
+            <span>▲ 정답이 더 큼 · ▼ 더 작음</span>
+          </div>
           <div className="bodle-head">
             {COLS.map((c) => (
               <span key={c.key}>{c.label}</span>
@@ -399,21 +566,46 @@ export default function BodlePage() {
                   {COLS.map((c) => {
                     const { mark, near, dir } = cellState(t.feedback, c.key);
                     const isNum = c.key === "weight" || c.key === "year";
-                    const names = isNum ? [] : tagNames(db, g, c.key as TagKey);
-                    const numVal = isNum ? numText(c.key as "weight" | "year", g) : "";
+                    // 판정 불가 칸은 "없음"과 반드시 구분해서 알려준다(점선 + 안내 문구).
+                    const dead = mark === "unknown";
+                    const chips = isNum ? [] : tagChips(db, g, c.key as TagKey, t.feedback);
+                    const nHit = chips.filter((x) => x.hit).length;
+                    /*
+                     * 좁은 칸에 태그 이름을 우겨넣는 대신 "맞은 수/낸 수"만 남긴다.
+                     * 어느 태그가 맞았는지는 위 단서판이 책임진다 — 10px로 잘린 이름은
+                     * 어차피 못 읽었고, 모바일에서는 title 툴팁도 뜨지 않았다.
+                     */
+                    const detail = dead
+                      ? `${c.label}: 판정 불가 — 정답 또는 이 게임에 정보가 없어요`
+                      : isNum
+                        ? undefined
+                        : `${c.label}: ${chips.map((x) => `${x.name} ${x.hit ? "✓" : "✗"}`).join(", ")}`;
                     return (
                       <div
                         key={c.key}
                         className={`cell ${mark} ${near ? "near" : ""}`}
-                        title={isNum ? undefined : names.join(", ")}
+                        title={detail}
+                        aria-label={detail}
                       >
                         {isNum ? (
-                          <>
-                            <span className={`v ${numVal === NO_DATA ? "long" : ""}`}>{numVal}</span>
-                            {dir && <span className="a">{ARROW[dir]}</span>}
-                          </>
+                          (() => {
+                            const numVal = numText(c.key as "weight" | "year", g);
+                            return (
+                              <>
+                                <span className={`v ${numVal === NO_DATA ? "long" : ""}`}>
+                                  {numVal}
+                                </span>
+                                {dir && <span className="a">{ARROW[dir]}</span>}
+                              </>
+                            );
+                          })()
+                        ) : dead ? (
+                          <span className="v long">판정 불가</span>
                         ) : (
-                          <span className="v long">{tagText(names)}</span>
+                          <span className="v count">
+                            {nHit}
+                            <em>/{chips.length}</em>
+                          </span>
                         )}
                       </div>
                     );
@@ -422,81 +614,91 @@ export default function BodlePage() {
               </div>
             );
           })}
+
+          {deadCols.length > 0 && (
+            <div className="bodle-dead">
+              ⓘ <b>{deadCols.map((c) => c.label).join(" · ")}</b> 열은 지금까지 한 번도 판정되지
+              않았어요 — 정보가 없어 비교할 수 없는 칸이니 단서로 쓰지 마세요.
+            </div>
+          )}
         </div>
       )}
 
-      {turns.length === 0 && db && (
-        <div className="empty">
-          아무 보드게임이나 추측해 보세요. 유형·테마·진행방식·무게·연도가
-          정답과 얼마나 맞는지 알려드려요.
-        </div>
-      )}
+      {turns.length === 0 &&
+        (db ? (
+          <div className="empty">
+            🎯 첫 추측을 시작해보세요!
+            <span>
+              아무 보드게임이나 넣으면 유형·테마·진행방식·무게·연도가 정답과 얼마나 맞는지
+              알려드려요. (예: 카탄, 윙스팬)
+            </span>
+          </div>
+        ) : (
+          !error && (
+            <div className="empty">
+              불러오는 중…
+              <span>오늘의 문제를 준비하고 있어요</span>
+            </div>
+          )
+        ))}
 
       {finished && (
         <div className="banner">
           <div className="banner-title">
             {solved ? `🎉 ${turns.length}번 만에 맞혔어요!` : "🏳️ 아쉬워요, 다음 판에!"}
           </div>
-
-          {solved && pct && !pct.pending && (
-            <div className="pct">
-              <div className="pct-head">
-                오늘 맞힌 사람 중 상위 <b>{pct.percentile}%</b>
-              </div>
-              <div className="pct-bar">
-                <span className="pct-fill" style={{ width: `${pct.percentile}%` }} />
-                <span className="pct-marker" style={{ left: `${pct.percentile}%` }} />
-              </div>
-              <div className="pct-note">
-                오늘 맞힌 {pct.total.toLocaleString()}명 중 <b>{pct.rank.toLocaleString()}위</b> ·{" "}
-                {pct.guesses}번 추측
-              </div>
+          {answer && (
+            <div className="banner-answer">
+              정답은 <b>{answer.name_ko ?? answer.name_en}</b>
+              {solved ? "!" : " 였어요."}
             </div>
           )}
-          {solved && pct?.pending && (
-            <div className="pct">
-              <div className="pct-pending">
-                🏆 아직 집계 중 · 오늘 {pct.total}명이 맞혔어요
-                <div className="pct-note">몇 명 더 맞히면 상위 %가 표시돼요</div>
-              </div>
-            </div>
+          <div className="banner-sub">매일 오전 9시 새 문제로 다시 만나요</div>
+
+          {solved && pct && (
+            <PercentileCard
+              info={pct}
+              heading="오늘 맞힌 사람 중 상위"
+              detail={`${pct.guesses}번 추측`}
+              dist={{
+                title: "추측 횟수별 정답자",
+                rows: BODLE_BUCKETS.map((b) => ({
+                  label: b,
+                  count: pct.guessDist?.[b] ?? 0,
+                  mine: b === bodleBucket(pct.guesses),
+                })),
+              }}
+            />
           )}
           {/* 포기한 사람에겐 백분위가 없다(표본이 정답자뿐). 대신 전체 현황을 보여준다. */}
           {!solved && todayStats && todayStats.players > 0 && (
-            <div className="pct">
-              <div className="pct-pending">
-                🌏 오늘 {todayStats.players.toLocaleString()}명 중{" "}
-                <b>{todayStats.solved.toLocaleString()}명</b>이 맞혔어요
-                <div className="pct-note">
-                  정답률{" "}
-                  {todayStats.players
-                    ? Math.round((todayStats.solved / todayStats.players) * 100)
-                    : 0}
-                  %
-                  {todayStats.avgGuesses > 0 && ` · 평균 ${todayStats.avgGuesses}번 추측`}
-                </div>
-              </div>
-            </div>
+            <TodaySummaryCard
+              players={todayStats.players}
+              solved={todayStats.solved}
+              avgGuesses={todayStats.avgGuesses}
+            />
           )}
 
           {answer && <AnswerCard info={answer} />}
 
           <div className="banner-actions">
             <button className="share-btn" onClick={share}>
-              {copied ? "복사됨!" : "📋 결과 공유"}
+              📋 결과 공유
             </button>
             <button className="stats-btn" onClick={openStats}>
               📊 통계
             </button>
           </div>
-          <Link href="/" className="bodle-cross">
-            이 게임으로 보맨틀 하러 가기 →
-          </Link>
+          {shareMsg && <div className="share-msg">{shareMsg}</div>}
         </div>
       )}
 
+      {/* 자매 게임 유도. 보맨틀 쪽과 같은 카드 모양을 쓴다. */}
+      <Link className="sister-link" href="/">
+        🎯 <b>보맨틀</b> — 유사도 점수로 오늘의 보드게임 맞히기 →
+      </Link>
+
       <footer className="site-footer">
-        <Link href="/">🎲 보맨틀로 돌아가기</Link>
         <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
           💬 문의·제보
         </a>
@@ -546,34 +748,38 @@ export default function BodlePage() {
                 </div>
               </div>
 
-              <div className="dist">
-                <div className="dist-title">
-                  추측 횟수 분포
-                  {stats.played - stats.solved > 0 && (
-                    <span className="dist-note"> · 실패 {stats.played - stats.solved}회</span>
-                  )}
+              <div className="stat-grid stat-grid-2 stat-grid-3">
+                <div className="stat-cell">
+                  <div className="stat-num">{bodleAvgGuesses(stats) || "–"}</div>
+                  <div className="stat-lbl">평균 추측</div>
                 </div>
-                {(() => {
-                  const max = Math.max(1, ...stats.dist);
-                  return Array.from({ length: 8 }, (_, i) => {
-                    const c = stats.dist[i] ?? 0;
-                    const hi = finished && solved && turns.length - 1 === i;
-                    return (
-                      <div className="dist-row" key={i}>
-                        <span className="dist-lbl">{i + 1}</span>
-                        <div className="dist-bar">
-                          <span
-                            className={`dist-fill ${hi ? "hi" : ""}`}
-                            style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
-                          >
-                            {c > 0 && <em>{c}</em>}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
+                <div className="stat-cell">
+                  <div className="stat-num">{bodleBestGuesses(stats) ?? "–"}</div>
+                  <div className="stat-lbl">베스트</div>
+                </div>
+                <div className="stat-cell">
+                  <div className="stat-num">{stats.played - stats.solved}</div>
+                  <div className="stat-lbl">실패</div>
+                </div>
               </div>
+
+              <DistBars
+                title="추측 횟수 분포"
+                note={
+                  stats.played - stats.solved > 0
+                    ? `실패 ${stats.played - stats.solved}회`
+                    : undefined
+                }
+                // 시도 횟수를 8 → 6으로 줄였어도 옛 기록(7·8번 만에 맞힘)은 계속 보여준다.
+                rows={Array.from(
+                  { length: Math.max(today?.maxGuesses ?? 6, stats.dist.length) },
+                  (_, i) => ({
+                    label: String(i + 1),
+                    count: stats.dist[i] ?? 0,
+                    mine: finished && solved && turns.length - 1 === i,
+                  }),
+                )}
+              />
             </>
           )}
 
@@ -589,21 +795,37 @@ export default function BodlePage() {
       <h2>보들이란?</h2>
       <p>
         보들은 매일 하나의 보드게임을 맞히는 무료 웹게임입니다. 아무 보드게임이나
-        추측하면 그 게임이 정답과 유형·테마·진행방식·무게(난이도)·출시연도에서
-        얼마나 겹치는지 알려주고, 그 단서로 후보를 좁혀 8번 안에 정답을 찾는 방식입니다.
-        영어 단어 맞히기 게임 워들(Wordle)·꼬들의 보드게임 버전이라고 보면 됩니다.
+        추측하면 그 게임의 유형·테마·진행방식 태그 중 <b>어느 것이 정답에도 있는지</b>를
+        하나씩 알려주고, 무게(난이도)·출시연도는 정답이 더 높은지 낮은지 알려줍니다.
+        그 단서로 후보를 좁혀 6번 안에 정답을 찾는 방식입니다. 영어 단어 맞히기 게임
+        워들(Wordle)·꼬들의 보드게임 버전이라고 보면 됩니다.
       </p>
       <h3>자주 묻는 질문</h3>
       <dl>
         <dt>새 문제는 언제 나오나요?</dt>
         <dd>매일 한국 시간(KST) 오전 9시에 새로운 보드게임 문제로 초기화됩니다.</dd>
-        <dt>색깔은 무슨 뜻인가요?</dt>
+        <dt>격자의 숫자와 색깔은 무슨 뜻인가요?</dt>
         <dd>
-          유형·테마·진행방식은 초록이 정답과 완전히 같음, 노랑이 일부만 겹침입니다.
-          무게와 연도는 초록이 정답과 <b>완전히 같은 값</b>일 때만이고, 근접한 범위 안이면
-          노랑입니다. 완전히 같은 값이 아니면 색과 별개로 ▲(정답이 더 높음)·▼(더 낮음)
-          화살표가 항상 붙어 다음 추측 방향을 알려줍니다. 아깝게 빗나갔을 때는 칸에
-          주황 테두리가 생깁니다.
+          유형·테마·진행방식 칸의 <b>1/3</b>은 &ldquo;내가 낸 태그 3개 중 1개가 정답에도
+          있다&rdquo;는 뜻입니다. 낸 태그가 전부 있으면 초록, 일부만 있으면 노랑, 하나도
+          없으면 회색입니다. 무게와 연도는 정답과 완전히 같은 값일 때만 초록이고,
+          근접한 범위(무게 0.75 이내, 연도 5년 이내)면 노랑, 더 벌어졌지만 아깝게
+          빗나갔으면(무게 1.25 이내, 연도 8년 이내) 주황 테두리가 생깁니다. 완전히 같은
+          값이 아니면 색과 별개로 ▲(정답이 더 높음)·▼(더 낮음) 화살표가 항상 붙어 다음
+          추측 방향을 알려줍니다.
+        </dd>
+        <dt>&ldquo;지금까지 알아낸 것&rdquo;은 뭔가요?</dt>
+        <dd>
+          지금까지 추측한 게임들의 태그 중 <b>정답에 있는 것으로 확인된 태그</b>와 없는
+          것으로 확인된 태그를 모아 보여줍니다. 워들의 키보드 색과 같은 역할이며, 다음에
+          어떤 게임을 넣을지 고를 때 여기를 보면 됩니다. 내가 추측한 게임의 태그만 나오고,
+          <b>내지 않은 정답의 태그는 나오지 않습니다.</b>
+        </dd>
+        <dt>점선으로 비어 있는 칸은 뭔가요?</dt>
+        <dd>
+          &ldquo;판정 불가&rdquo; 칸입니다. 정답 또는 추측한 게임에 그 항목 정보가 아예 없어
+          비교할 수 없다는 뜻이며, <b>&ldquo;안 겹친다&rdquo;는 뜻이 아닙니다.</b> 어떤 열이
+          계속 판정 불가로 나오면 그 열은 오늘 단서가 될 수 없으니 무시하세요.
         </dd>
         <dt>&ldquo;단서에 맞는 게임 N개 남음&rdquo;은 뭔가요?</dt>
         <dd>

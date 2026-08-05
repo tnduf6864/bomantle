@@ -144,6 +144,31 @@ export function recordBodleResult(
   return next;
 }
 
+/** 정답률(%). 플레이 0이면 0. */
+export function bodleWinRate(s: BodleStats): number {
+  return s.played ? Math.round((s.solved / s.played) * 100) : 0;
+}
+
+/**
+ * 맞힌 판의 평균 추측 횟수(소수 1자리). dist에는 맞힌 판만 담기므로 실패는 분모에 없다.
+ * 맞힌 적이 없으면 0.
+ */
+export function bodleAvgGuesses(s: BodleStats): number {
+  let total = 0;
+  let count = 0;
+  s.dist.forEach((c, i) => {
+    total += c * (i + 1);
+    count += c;
+  });
+  return count ? Math.round((total / count) * 10) / 10 : 0;
+}
+
+/** 가장 적은 추측으로 맞힌 횟수. 맞힌 적이 없으면 null. */
+export function bodleBestGuesses(s: BodleStats): number | null {
+  const i = s.dist.findIndex((c) => c > 0);
+  return i < 0 ? null : i + 1;
+}
+
 /**
  * 화면에 보여줄 연속 기록. 마지막 기록이 어제도 오늘도 아니면 이미 끊긴 것이므로 0.
  * (저장값을 건드리지 않고 표시만 보정한다 — 보맨틀 effectiveStreak과 같은 방식)
@@ -156,7 +181,11 @@ export function effectiveBodleStreak(s: BodleStats, today: string): number {
 
 // --- 공유 텍스트 ------------------------------------------------------------
 
-/** 집합 열 판정 → 이모지. */
+/**
+ * 집합 열 판정 → 이모지.
+ * "판정 불가"(unknown)도 ⬜로 묶는다 — 공유 그리드는 복기용이 아니라 자랑용이라
+ * 상태를 늘리면 남이 읽기만 어려워진다(화면에서는 점선 칸으로 구분해 보여준다).
+ */
 function setEmoji(m: BodleFeedback["types"]): string {
   return m === "hit" ? "🟩" : m === "partial" ? "🟨" : "⬜";
 }

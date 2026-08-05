@@ -1,5 +1,6 @@
 import { GUESS_BUCKETS, type GuessBucket } from "../lib/stats";
 import type { TodayStats } from "../lib/types";
+import { DistBars } from "./DistBars";
 
 /** 오늘 참여자 중 맞힌 비율(%). 참여 0이면 0. */
 function todayWinRate(s: TodayStats): number {
@@ -20,7 +21,6 @@ export function TodayStatsCard({
   myBucket: GuessBucket | null;
   buckets?: readonly GuessBucket[];
 }) {
-  const max = Math.max(1, ...buckets.map((b) => info.guessDist[b] ?? 0));
   return (
     <div className="today-stats">
       <div className="dist-title">
@@ -48,28 +48,15 @@ export function TodayStatsCard({
           </div>
 
           {info.solved > 0 && (
-            <div className="dist">
-              <div className="dist-title">
-                추측 횟수 분포
-                <span className="dist-note"> · 맞힌 {info.solved.toLocaleString()}명 기준</span>
-              </div>
-              {buckets.map((b) => {
-                const c = info.guessDist[b] ?? 0;
-                return (
-                  <div className="dist-row" key={b}>
-                    <span className="dist-lbl">{b}</span>
-                    <div className="dist-bar">
-                      <span
-                        className={`dist-fill ${b === myBucket ? "hi" : ""}`}
-                        style={{ width: `${c ? Math.max(12, (c / max) * 100) : 0}%` }}
-                      >
-                        {c > 0 && <em>{c}</em>}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DistBars
+              title="추측 횟수 분포"
+              note={`맞힌 ${info.solved.toLocaleString()}명 기준`}
+              rows={buckets.map((b) => ({
+                label: b,
+                count: info.guessDist[b] ?? 0,
+                mine: b === myBucket,
+              }))}
+            />
           )}
         </>
       )}

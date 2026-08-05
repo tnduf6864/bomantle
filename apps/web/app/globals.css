@@ -204,6 +204,22 @@ header.top .visitors {
   margin-bottom: 16px;
 }
 .banner b { font-size: 18px; }
+.banner-title {
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+}
+/* 배너 제목 아래 보조 문구(정답 이름·안내). 두 게임이 같은 위계를 쓴다. */
+.banner-answer {
+  margin-top: 6px;
+  font-size: 15px;
+}
+.banner-answer b { font-size: 17px; }
+.banner-sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
 /* 정답 공개 카드: 박스아트 + 사양 + 태그 */
 .answer-card {
   margin-top: 14px;
@@ -629,6 +645,8 @@ header.top .visitors {
   transition: width 0.4s ease;
 }
 .dist-fill.hi { background: var(--cool); }
+/* 0명인 줄은 막대를 아예 그리지 않는다 — 좌우 패딩만 남아 "1명쯤 있음"처럼 보이던 자국 제거. */
+.dist-fill:empty { padding: 0; }
 .dist-fill em {
   font-style: normal;
   font-size: 11px;
@@ -842,14 +860,142 @@ header.top .visitors {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * 누적 단서판 — 워들의 키보드에 해당하는 자리. 격자가 기록이라면 여기는 "지금까지
+ * 알아낸 것"이고, 다음 추측을 고를 때 실제로 보는 화면이다.
+ */
+.clues {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.clues-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 9px;
+}
+.clue-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.clue-lbl {
+  flex: none;
+  width: 66px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.clue-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+.clue-chips .chip {
+  padding: 3px 9px;
+  font-size: 12px;
+  border-radius: 999px;
+  word-break: keep-all;
+}
+/* 확인된 단서는 초록 — 격자의 🟩과 같은 뜻이라 같은 색을 쓴다. */
+.clue-chips .chip.yes {
+  background: rgba(76, 175, 114, 0.15);
+  border: 1px solid var(--cool);
+  color: var(--text);
+  font-weight: 600;
+}
+.clue-chips .chip.no {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.clue-empty {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0 4px;
+}
+.clue-no {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.clue-toggle {
+  width: 100%;
+  padding: 4px 0;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.clue-toggle:hover { color: var(--text); }
+.clue-no .clue-row { margin-top: 8px; }
+
 .bodle-grid { margin-top: 14px; }
 
-/* 열 머리글 — 셀 그리드와 같은 5등분이라 세로로 정렬된다. */
+/* 색 범례 — 그리드 바로 위. 칸 색과 같은 토큰을 써야 눈으로 연결된다. */
+.bodle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.bodle-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.bodle-legend i {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+}
+.bodle-legend i.hit { background: var(--cool); }
+.bodle-legend i.partial { background: var(--warm); }
+.bodle-legend i.miss { background: var(--panel-2); border-color: var(--border); }
+.bodle-legend i.near {
+  border-color: var(--warm);
+  box-shadow: inset 0 0 0 1px rgba(255, 180, 84, 0.35);
+}
+.bodle-legend i.unknown { border: 1px dashed var(--border); }
+
+/* 오늘 판정이 아예 불가능한 열 안내. 경고가 아니라 정보라 색을 쓰지 않는다. */
+.bodle-dead {
+  margin: 2px 0 10px;
+  padding: 9px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+.bodle-dead b { color: var(--text); }
+
+/*
+ * 열 머리글 — 셀 그리드와 같은 5등분.
+ * 행 카드의 안쪽 여백(패딩 8px + 테두리 1px)만큼 밀어야 실제 칸과 세로로 맞는다.
+ */
 .bodle-head {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 6px;
-  padding: 0 2px 6px;
+  padding: 0 9px 6px;
   font-size: 11px;
   color: var(--muted);
   text-align: center;
@@ -926,6 +1072,19 @@ header.top .visitors {
 }
 .bodle-cells .cell .a { font-size: 10px; opacity: 0.85; }
 
+/* 태그 열의 "맞은 수/낸 수". 앞 숫자가 정보라 크게, 분모는 작게. */
+.bodle-cells .cell .v.count {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.bodle-cells .cell .v.count em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+
 /*
  * 태그 이름(유형·테마·진행방식)이나 "정보 없음" 문구처럼 숫자보다 긴 텍스트용.
  * 무게·연도 칸도 데이터가 없으면 이 스타일을 같이 쓴다(줄바꿈 필요).
@@ -949,13 +1108,39 @@ header.top .visitors {
 .bodle-cells .cell.miss,
 .bodle-cells .cell.up,
 .bodle-cells .cell.down { background: var(--panel-2); color: var(--text); }
-.bodle-cells .cell.unknown { background: #2a2f3a; color: var(--muted); }
+/*
+ * 판정 불가(정답 또는 추측한 게임에 그 정보가 없음). "안 겹침"(회색 채움)과 반드시
+ * 달라 보여야 한다 — 색이 아니라 **점선 테두리 + 빈 배경**으로 구분해 색각과 무관하게 읽힌다.
+ */
+.bodle-cells .cell.unknown {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+  color: var(--muted);
+}
 
 /* "근접" — 🟩은 아니지만 아슬아슬하게 빗나감. 정보량은 거의 안 늘고 긴장만 올린다. */
 .bodle-cells .cell.near {
   border-color: var(--warm);
   box-shadow: inset 0 0 0 1px rgba(255, 180, 84, 0.35);
 }
+
+/* 남은 시도 칸. 한 칸씩 차오르는 게 숫자보다 빨리 읽힌다(마지막 정답 칸은 초록). */
+.bodle-tries {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 10px;
+}
+.bodle-tries .pip {
+  width: 18px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+.bodle-tries .pip.used { background: var(--accent); border-color: var(--accent); }
+.bodle-tries .pip.hit { background: var(--cool); border-color: var(--cool); }
 
 /* 헤더의 후보 수·남은 시도·연속 기록 — 카운트다운 알약과 시각적으로 겹치지 않게 얇은 텍스트로. */
 .bodle-progress {
@@ -966,21 +1151,6 @@ header.top .visitors {
 .bodle-progress b {
   color: var(--text);
   font-weight: 700;
-}
-
-.bodle-cross {
-  display: inline-block;
-  margin-top: 14px;
-  font-size: 13px;
-  color: var(--accent);
-  text-decoration: none;
-}
-.bodle-cross:hover { text-decoration: underline; }
-
-.banner-title {
-  font-size: 17px;
-  font-weight: 700;
-  text-align: center;
 }
 
 /* 보맨틀 ↔ 보들 상호 유도 링크 */

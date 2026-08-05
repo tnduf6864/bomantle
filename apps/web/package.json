@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test lib/stats.test.ts lib/games.test.ts"
+    "test": "node --test lib/stats.test.ts lib/games.test.ts lib/bodle.test.ts"
   },
   "dependencies": {
     "next": "^15.1.3",

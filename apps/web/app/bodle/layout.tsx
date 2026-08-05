@@ -4,12 +4,12 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "보들 — 하루 한 판 보드게임 맞히기",
   description:
-    "오늘의 보드게임을 8번 안에 맞혀보세요. 유형·테마·진행방식·무게·출시연도 다섯 가지 단서로 좁혀나가는 보드게임 워들(Wordle). 매일 오전 9시 새 문제.",
+    "오늘의 보드게임을 6번 안에 맞혀보세요. 유형·테마·진행방식·무게·출시연도 다섯 가지 단서로 좁혀나가는 보드게임 워들(Wordle). 매일 오전 9시 새 문제.",
   keywords: ["보들", "보드게임 워들", "보드게임 퀴즈", "보드게임 게임", "워들", "보맨틀"],
   alternates: { canonical: "https://bomantle.pages.dev/bodle" },
   openGraph: {
     title: "보들 — 하루 한 판 보드게임 맞히기",
-    description: "다섯 가지 단서로 오늘의 보드게임을 8번 안에 맞혀보세요.",
+    description: "다섯 가지 단서로 오늘의 보드게임을 6번 안에 맞혀보세요.",
     url: "https://bomantle.pages.dev/bodle",
     type: "website",
     locale: "ko_KR",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "보들 — 하루 한 판 보드게임 맞히기",
-    description: "다섯 가지 단서로 오늘의 보드게임을 8번 안에 맞혀보세요.",
+    description: "다섯 가지 단서로 오늘의 보드게임을 6번 안에 맞혀보세요.",
   },
 };
 

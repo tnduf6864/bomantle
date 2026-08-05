@@ -126,13 +126,25 @@ export interface GuessRow extends GuessResult {
 // --- 보들(보드게임 Wordle) --------------------------------------------------
 // 서버 워커 `bodle.ts`와 같은 형태. 정답 속성은 끝나기 전까지 절대 내려오지 않는다.
 
-export type BodleSetMark = "hit" | "partial" | "miss";
+/**
+ * 집합 열의 요약 판정(화면 색 + 공유 이모지용). 실제 단서는 `*Hit` 목록이다.
+ * hit = 내 태그가 전부 정답에도 있음 / partial = 일부 / miss = 없음 /
+ * unknown = 한쪽에 태그가 아예 없어 비교 불가.
+ */
+export type BodleSetMark = "hit" | "partial" | "miss" | "unknown";
 export type BodleNumMark = "hit" | "up" | "down" | "unknown";
 
 export interface BodleFeedback {
   types: BodleSetMark;
   categories: BodleSetMark;
   mechanisms: BodleSetMark;
+  /**
+   * 내 추측의 태그 중 정답에도 있는 것(교집합). **정답의 전체 태그가 아니다** —
+   * 내가 내지 않은 태그는 내려오지 않는다. 추측한 게임의 태그 순서를 그대로 따른다.
+   */
+  typesHit: string[];
+  categoriesHit: number[];
+  mechanismsHit: number[];
   weight: BodleNumMark;
   weightNear: boolean;
   /** weight가 "hit"이고 완전히 같은 값일 때만 true(초록 vs 노랑 표시용) */

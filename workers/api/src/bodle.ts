@@ -1,40 +1,63 @@
 // 보들(보드게임 Wordle)의 순수 로직. 저장·라우팅 없이 `node --test`로 돌린다.
 // answer.ts / hint.ts / rank.ts 와 같은 패턴.
 //
-// 설계 근거와 측정치는 docs/bodle-plan.md 참고. 요약하면:
-//  - 속성 피드백은 정보량이 과잉이라(추측 1회 = 5.17 bit / 전체 9.11 bit) 그대로 두면
-//    완벽한 추론자가 평균 2.6회에 끝낸다. 그래서 **일부러 정밀도를 깎았다**.
-//  - 깎은 결과가 TUNING. 평균 4.50회 / 6회내 82% (실제 Wordle: 평균 3.9~4.2회, 6회내 95%).
-//  - 6회내 성공률이 100%가 아니라 동점 후보가 남기 때문에 시도는 8회를 준다.
+// 설계 근거는 docs/bodle-plan.md 참고.
 //
-// ⚠️ TUNING을 만지면 반드시 `node scripts/bodle-sim.mjs`를 돌려 평균과 6회내 성공률을
-//    함께 확인할 것. 평균만 보면 "구분 불가능한 동점 후보" 문제를 놓친다.
+// 태그 열(유형·테마·진행방식)은 **겹친 태그를 그대로 공개**한다. 예전에는 "몇 개
+// 겹쳤나"만 집계해 hit/partial/miss로 뭉갰는데, 임계 2 때문에 정답 풀 313개의 모든 쌍
+// 중 테마가 🟨 이상인 경우가 3.8%뿐이라 **화면 5칸 중 2칸이 사실상 항상 회색**이었다.
+// (게다가 회색의 26%는 실제로 1개가 겹친 경우라 "안 겹침"이 거짓말이었다.)
+// 워들이 글자 단위로 알려주듯 태그 단위로 알려주는 게 이 게임의 원래 모양이다.
+//
+// 실측(정답 풀 313개 / 최적 플레이 300판):
+//   예전 집계 방식  평균 3.20회 · 4회내 94%
+//   태그 공개 방식  평균 2.59회 · 4회내 100%  ← 그래서 시도를 8 → 6으로 줄였다
+//
+// ⚠️ TUNING을 만지면 난이도를 반드시 다시 잴 것. `scripts/bodle-sim.mjs`는 설계 탐색용
+//    근사치(4열·near 없음)라 실측과 다르다 — 아래 compareBodle/feedbackKey를 그대로
+//    쓰는 시뮬레이터로 재야 한다. 평균만 보면 "구분 불가능한 동점 후보" 문제를 놓친다.
 
 import type { FullGame } from "./hint.ts";
 import { buildAnswerPool, dailyAnswerFromSeed } from "./answer.ts";
 
 /** 난이도 노브. 값 하나만 바꿔도 체감 난이도가 크게 움직인다(위 주석 참고). */
 export const TUNING = {
-  /** 시도 횟수. */
-  maxGuesses: 8,
-  /** 유형(types)은 하나만 겹쳐도 🟨 — 원소가 1~2개뿐이라 임계를 올릴 여지가 없다. */
-  typesThreshold: 1,
-  /** 테마·메커니즘은 2개 이상 겹쳐야 🟨. 1로 낮추면 평균 2.7회, 3으로 올리면 5.3회. */
-  tagThreshold: 2,
+  /**
+   * 시도 횟수.
+   *
+   * 태그 열이 "겹친 태그를 그대로 공개"하는 구조로 바뀌면서 8 → 6으로 줄였다.
+   * 8을 유지하면 최적 플레이 기준 **4회 안에 100%** 끝나서 긴장이 남지 않는다.
+   */
+  maxGuesses: 6,
   /** |Δweight| 이 이하면 🟩. */
   weightBand: 0.75,
   /** 🟩은 아니지만 이 안쪽이면 "근접"(테두리 강조). weightBand보다 커야 의미가 있다. */
   weightNearBand: 1.25,
-  /** 같은 N년대면 🟩 (10 = 2010년대끼리). */
-  yearGranularity: 10,
-  /** 연대가 달라도 이 해 차 이내면 "근접". 2019 vs 2021 같은 경계 케이스를 잡는다. */
-  yearNearYears: 3,
+  /**
+   * |Δ연도| 이 이하면 🟩.
+   *
+   * ⚠️ 예전에는 "같은 연대(10년 단위)"였는데, 그러면 근접도가 **뒤집힌다**:
+   * 정답 2019에 대해 2010(9년 차)은 같은 201x라 🟩인데 2021(2년 차)은 202x라 ⬜였다.
+   * 플레이어는 2021을 보고 "멀어졌다"고 읽고 반대 방향으로 좁힌다. 무게와 같은
+   * "차이 기준" 밴드로 바꿔서 화면의 가까움과 실제 가까움을 일치시킨다.
+   */
+  yearBand: 5,
+  /** 🟩은 아니지만 이 해 차 이내면 "근접"(테두리 강조). yearBand보다 커야 의미가 있다. */
+  yearNearYears: 8,
   /** 남은 후보 수를 보여주기 시작하는 추측 횟수. */
   remainingFromTurn: 3,
 } as const;
 
-/** 집합 열(유형·테마·메커니즘)의 판정. */
-export type SetMark = "hit" | "partial" | "miss";
+/**
+ * 집합 열(유형·테마·메커니즘)의 요약 판정. 화면의 "n/m" 색과 공유 이모지에 쓴다.
+ * 실제 단서는 아래 `*Hit`(겹친 태그 목록)이고, 이건 그걸 한 글자로 줄인 것이다.
+ *
+ * - hit     = 내가 낸 태그가 **전부** 정답에도 있음 (정답이 더 갖고 있을 수는 있다)
+ * - partial = 일부만 있음
+ * - miss    = 하나도 없음
+ * - unknown = 양쪽 중 한쪽에 태그가 아예 없어 **비교 자체가 불가능**(miss와 구분해야 한다)
+ */
+export type SetMark = "hit" | "partial" | "miss" | "unknown";
 /** 수치 열(무게·연도)의 판정. unknown = 추측한 게임에 그 값이 없음. */
 export type NumMark = "hit" | "up" | "down" | "unknown";
 
@@ -42,6 +65,14 @@ export interface BodleFeedback {
   types: SetMark;
   categories: SetMark;
   mechanisms: SetMark;
+  /**
+   * **내 추측의 태그 중 정답에도 있는 것**(교집합만). 정답의 전체 태그가 아니다 —
+   * 내가 내지 않은 태그는 절대 새지 않는다. 워들이 내가 친 글자에 대해서만
+   * 초록·노랑을 알려주는 것과 같다.
+   */
+  typesHit: string[];
+  categoriesHit: number[];
+  mechanismsHit: number[];
   weight: NumMark;
   /** 무게가 🟩은 아니지만 가까움. */
   weightNear: boolean;
@@ -107,30 +138,31 @@ export function bodleAnswerFromSeed(date: string, pool: number[]): number {
 
 // --- 피드백 ---------------------------------------------------------------
 
-function sameSet(a: readonly number[] | readonly string[], b: readonly number[] | readonly string[]): boolean {
-  if (a.length !== b.length) return false;
-  const bs = new Set<unknown>(b);
-  return a.every((x) => bs.has(x));
-}
-
-function overlap(a: readonly number[] | readonly string[], b: readonly number[] | readonly string[]): number {
-  const bs = new Set<unknown>(b);
-  let n = 0;
-  for (const x of a) if (bs.has(x)) n += 1;
-  return n;
-}
-
-function markSet(
-  a: readonly number[] | readonly string[] | undefined,
-  b: readonly number[] | readonly string[] | undefined,
-  threshold: number,
-): SetMark {
+/**
+ * 집합 열 판정. **내가 낸 태그 중 정답에도 있는 것들**과 그 요약을 함께 돌려준다.
+ *
+ * 순서는 추측한 게임의 태그 순서를 그대로 따른다 — 화면에서 칩을 원래 순서로
+ * 늘어놓고 맞은 것만 표시하기 때문에, 여기서 정렬해 버리면 순서가 어긋난다.
+ */
+function markSet<T extends number | string>(
+  a: readonly T[] | undefined,
+  b: readonly T[] | undefined,
+): { mark: SetMark; hit: T[] } {
   const x = a ?? [];
   const y = b ?? [];
-  // 양쪽 다 비어 있으면 "같다"고 볼 근거가 없다 — 정보가 없는 것이므로 miss.
-  if (x.length === 0 || y.length === 0) return "miss";
-  if (sameSet(x, y)) return "hit";
-  return overlap(x, y) >= threshold ? "partial" : "miss";
+  /*
+   * 한쪽이라도 비어 있으면 비교할 근거가 없다 → unknown.
+   * miss로 뭉개면 플레이어가 "내 추측이 빗나갔다"로 읽는데, 정답에 그 태그가 아예
+   * 없는 판에서는 **무슨 게임을 넣어도 끝까지 ⬜**라 헛다리만 짚게 된다.
+   */
+  if (x.length === 0 || y.length === 0) return { mark: "unknown", hit: [] };
+
+  const ys = new Set<unknown>(y);
+  const hit = x.filter((v) => ys.has(v));
+  // hit = "내가 낸 태그가 전부 정답에도 있음". 정답이 더 갖고 있어도 초록이다 —
+  // 집합이 완전히 같을 때만 초록으로 두면 태그 3~5개짜리끼리는 사실상 도달 불가였다.
+  const mark: SetMark = hit.length === x.length ? "hit" : hit.length > 0 ? "partial" : "miss";
+  return { mark, hit };
 }
 
 /**
@@ -149,10 +181,17 @@ function yearOf(g: FullGame): number {
  * 클라이언트로 정답 속성을 내려보내면 DevTools로 즉시 털린다.
  */
 export function compareBodle(guess: FullGame, answer: FullGame): BodleFeedback {
+  const t = markSet(guess.types, answer.types);
+  const c = markSet(guess.categories, answer.categories);
+  const m = markSet(guess.mechanisms, answer.mechanisms);
+
   const fb: BodleFeedback = {
-    types: markSet(guess.types, answer.types, TUNING.typesThreshold),
-    categories: markSet(guess.categories, answer.categories, TUNING.tagThreshold),
-    mechanisms: markSet(guess.mechanisms, answer.mechanisms, TUNING.tagThreshold),
+    types: t.mark,
+    categories: c.mark,
+    mechanisms: m.mark,
+    typesHit: t.hit,
+    categoriesHit: c.hit,
+    mechanismsHit: m.hit,
     weight: "unknown",
     weightNear: false,
     weightExact: false,
@@ -178,27 +217,35 @@ export function compareBodle(guess: FullGame, answer: FullGame): BodleFeedback {
   const gy = yearOf(guess);
   const ay = yearOf(answer);
   if (!Number.isNaN(gy) && !Number.isNaN(ay)) {
-    fb.yearDir = ay > gy ? "up" : ay < gy ? "down" : null;
-    const gd = Math.floor(gy / TUNING.yearGranularity);
-    const ad = Math.floor(ay / TUNING.yearGranularity);
-    if (gd === ad) {
+    const d = ay - gy;
+    fb.yearDir = d > 0 ? "up" : d < 0 ? "down" : null;
+    if (Math.abs(d) <= TUNING.yearBand) {
       fb.year = "hit";
-      fb.yearExact = gy === ay;
+      fb.yearExact = d === 0;
     } else {
-      fb.year = ay > gy ? "up" : "down";
-      fb.yearNear = Math.abs(ay - gy) <= TUNING.yearNearYears;
+      fb.year = d > 0 ? "up" : "down";
+      fb.yearNear = Math.abs(d) <= TUNING.yearNearYears;
     }
   }
 
   return fb;
 }
 
-/** 피드백 동치 비교용 키. 남은 후보를 셀 때 쓴다. */
+/**
+ * 피드백 동치 비교용 키. 남은 후보를 셀 때 쓴다.
+ *
+ * **겹친 태그 목록까지 포함해야 한다** — 화면이 "어느 태그가 맞았는지"를 보여주므로,
+ * 목록이 다르면 플레이어에게 서로 다른 판으로 보인다. 요약(mark)만 비교하면 실제보다
+ * 후보를 많이 세게 되고, 반대로 목록만 비교하면 unknown과 miss를 구분하지 못한다.
+ */
 export function feedbackKey(fb: BodleFeedback): string {
   return [
     fb.types,
+    fb.typesHit.join(","),
     fb.categories,
+    fb.categoriesHit.join(","),
     fb.mechanisms,
+    fb.mechanismsHit.join(","),
     fb.weight,
     fb.weightNear ? "n" : "-",
     fb.year,
