@@ -11,7 +11,14 @@ import type {
   TodayInfo,
   TodayStats,
 } from "../lib/types";
-import { loadGameDB, resolve, suggest, categoryNames, type GameDB } from "../lib/games";
+import {
+  loadGameDB,
+  resolve,
+  suggest,
+  categoryNames,
+  SUGGEST_LIMIT,
+  type GameDB,
+} from "../lib/games";
 import {
   fetchToday,
   fetchGuess,
@@ -40,6 +47,7 @@ import {
 import { deviceId } from "../lib/bodle";
 import { FEEDBACK_URL } from "../lib/constants";
 import { RESET_HOUR, clientPuzzleDate, msUntilNextReset, formatCountdown } from "../lib/reset";
+import { useKeyboardInsets, useScrollInputIntoView } from "../lib/keyboard";
 import { AnswerCard } from "../components/AnswerCard";
 import { TodayStatsCard } from "../components/TodayStatsCard";
 import { PercentileCard, TodaySummaryCard } from "../components/PercentileCard";
@@ -97,6 +105,7 @@ function buildShareText(
 // 전체 순위 목록을 한 번에 가져오는 개수(서버 MAX_LIMIT=200 이하).
 const RANK_PAGE = 100;
 
+
 // 백분위 재조회 최소 간격. 표본이 하루 내내 늘어 값이 변하지만, 탭을 자주 왕복해도
 // 요청이 몰리지 않게 막는다.
 const PCT_REFRESH_MS = 60_000;
@@ -151,6 +160,7 @@ export default function Page() {
   const [backupMsg, setBackupMsg] = useState("");
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const suggestRef = useRef<HTMLDivElement>(null);
   // 응답 대기 중인 gameId. 같은 게임 연속 제출(race) 중복 추가 방지.
   const inFlightRef = useRef<Set<number>>(new Set());
   // 하루 경계 재조회 진행 중 플래그(중복 fetch 방지).
@@ -409,11 +419,27 @@ export default function Page() {
   }
 
   // 자동완성: 이미 추측한 게임은 제외 (id 기준 — 동명 다른 게임은 남김).
-  // 제외를 suggest에 넘겨야 8개가 전부 기추측일 때 후보가 빈 채로 남지 않는다.
+  // 제외를 suggest에 넘겨야 후보가 전부 기추측일 때 목록이 빈 채로 남지 않는다.
   const suggestions = useMemo(
-    () => (db && query ? suggest(db, query, 8, guessedIds) : []),
+    () => (db && query ? suggest(db, query, SUGGEST_LIMIT, guessedIds) : []),
     [db, query, guessedIds],
   );
+
+  // 모바일 가상 키보드가 입력창을 가리지 않게 — 여백(--kb) 확보 + 포커스 시 끌어올리기.
+  useKeyboardInsets();
+  const scrollInputIntoView = useScrollInputIntoView(inputRef);
+
+  // 후보가 SUGGEST_LIMIT개까지 늘어 목록이 스크롤된다. ↑↓로 옮긴 선택 항목이
+  // 접힌 영역에 숨지 않도록 목록만 따라 스크롤한다(scrollIntoView는 페이지까지 움직인다).
+  useEffect(() => {
+    const box = suggestRef.current;
+    const el = box?.children[activeIdx] as HTMLElement | undefined;
+    if (!box || !el) return;
+    const top = el.offsetTop;
+    const bottom = top + el.offsetHeight;
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+  }, [activeIdx]);
 
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => b.score - a.score),
@@ -717,13 +743,14 @@ export default function Page() {
                 setActiveIdx(0);
               }}
               onKeyDown={onKeyDown}
+              onFocus={scrollInputIntoView}
               autoComplete="off"
             />
             <button disabled={loading || !query} onClick={submitCurrent}>
               추측
             </button>
             {suggestions.length > 0 && (
-              <div className="suggest">
+              <div className="suggest" ref={suggestRef}>
                 {suggestions.map((s, i) => (
                   <div
                     key={s.id}

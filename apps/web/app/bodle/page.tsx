@@ -17,6 +17,7 @@ import {
   suggest,
   categoryNames,
   mechanismNames,
+  SUGGEST_LIMIT,
   type GameDB,
 } from "../../lib/games";
 import {
@@ -41,6 +42,7 @@ import {
 } from "../../lib/bodle";
 import { FEEDBACK_URL } from "../../lib/constants";
 import { msUntilNextReset, formatCountdown } from "../../lib/reset";
+import { useKeyboardInsets, useScrollInputIntoView } from "../../lib/keyboard";
 import { AnswerCard } from "../../components/AnswerCard";
 import { TodayStatsCard } from "../../components/TodayStatsCard";
 import { PercentileCard, TodaySummaryCard } from "../../components/PercentileCard";
@@ -162,11 +164,28 @@ export default function BodlePage() {
   // 결과 제출은 하루 한 번이면 충분하다(서버도 멱등). 재렌더로 중복 호출되지 않게 막는다.
   const submittedRef = useRef<string | null>(null);
 
+  const suggestRef = useRef<HTMLDivElement>(null);
+
+  // 모바일 가상 키보드가 입력창을 가리지 않게 — 여백(--kb) 확보 + 포커스 시 끌어올리기.
+  useKeyboardInsets();
+  const scrollInputIntoView = useScrollInputIntoView(inputRef);
+
   const guessedIds = useMemo(() => new Set(turns.map((t) => t.gameId)), [turns]);
   const suggestions = useMemo(
-    () => (db && query ? suggest(db, query, 8, guessedIds) : []),
+    () => (db && query ? suggest(db, query, SUGGEST_LIMIT, guessedIds) : []),
     [db, query, guessedIds],
   );
+
+  // ↑↓로 옮긴 선택 항목이 스크롤되는 목록 밖으로 숨지 않게 (보맨틀 page.tsx와 동일).
+  useEffect(() => {
+    const box = suggestRef.current;
+    const el = box?.children[activeIdx] as HTMLElement | undefined;
+    if (!box || !el) return;
+    const top = el.offsetTop;
+    const bottom = top + el.offsetHeight;
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (bottom > box.scrollTop + box.clientHeight) box.scrollTop = bottom - box.clientHeight;
+  }, [activeIdx]);
 
   const applyResult = useCallback(
     (
@@ -433,13 +452,14 @@ export default function BodlePage() {
               setActiveIdx(0);
             }}
             onKeyDown={onKeyDown}
+            onFocus={scrollInputIntoView}
             autoComplete="off"
           />
           <button disabled={!db || busy || !query} onClick={submitCurrent}>
             추측
           </button>
           {suggestions.length > 0 && (
-            <div className="suggest">
+            <div className="suggest" ref={suggestRef}>
               {suggestions.map((s, i) => (
                 <div
                   key={s.id}

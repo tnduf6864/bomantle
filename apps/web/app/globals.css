@@ -26,7 +26,10 @@ html, body {
 .wrap {
   max-width: 620px;
   margin: 0 auto;
-  padding: 24px 16px 80px;
+  /* 아래 여백에 --kb(가상 키보드가 덮은 높이)를 더한다. 이게 없으면 추측 전처럼
+     페이지가 짧을 때 입력창을 키보드 위로 끌어올릴 스크롤 여유 자체가 없다.
+     키보드가 없을 때는 --kb가 0이라 평소 레이아웃은 그대로다. (lib/keyboard.ts) */
+  padding: 24px 16px calc(80px + var(--kb, 0px));
 }
 
 header.top {
@@ -124,7 +127,14 @@ header.top .visitors {
   background: var(--panel-2);
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+  /* 후보를 30개까지 띄우므로 목록 안에서 스크롤한다. 화면 절반을 넘기지 않아
+     모바일에서 뒤 내용을 통째로 덮지 않는다.
+     키보드가 올라온 동안에는 --vvh(실제 보이는 높이) 기준으로 더 줄여, 목록이
+     키보드 뒤로 흘러내리지 않게 한다. 입력창 높이 + 여백만큼 뺀 값. */
+  max-height: min(44vh, calc(var(--vvh, 100vh) - 76px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   z-index: 10;
 }
 .suggest .item {
