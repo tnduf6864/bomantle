@@ -1,4 +1,8 @@
-"""games_list.json 의 각 게임 상세 페이지(/game/{id})를 크롤링해
+"""[부분 폐기] games_list.json 의 각 게임 상세 페이지(/game/{id})를 크롤링해
+
+⚠️ 이제 진입점은 `crawl_all.py`다(등록 게임 전수 스윕). 다만 아래 `parse_detail`은
+그대로 재사용하므로 이 파일을 지우면 안 된다. `main()`만 games_list.json에 묶여 있다.
+
 BGG id, 보드라이프 분류(테마/진행방식/타입/디자이너/그룹), 인원/난이도/시간/연령,
 베스트·추천 인원, 평가 수, 박스아트 이미지 등을 수집한다.
 
@@ -27,6 +31,17 @@ def _links(soup, kind):
             seen.add(m.group(1))
             out.append({"id": int(m.group(1)), "name": name})
     return out
+
+
+def _vote(soup, vtype):
+    """커뮤니티 투표 요약(.gvs-list)의 한 항목 값. 투표가 없으면 '-'라 None으로 본다.
+
+    2026-08 개편으로 유형(옛 /info/type/N)·베스트/추천 인원이 전부 이 블록으로 옮겨졌다.
+    옛 셀렉터(a[href*='/info/type/'], .recommend-player)는 페이지에서 사라졌다.
+    """
+    el = soup.select_one(f".gvs-item[data-vtype='{vtype}'] .gvs-value")
+    v = el.get_text(" ", strip=True) if el else None
+    return None if v in (None, "", "-") else v
 
 
 def _ld_product(soup):
@@ -59,18 +74,22 @@ def parse_detail(html):
     # 보드라이프 분류 (/info/<kind>/N). 종류별 네임스페이스 분리 저장.
     d["categories"] = _links(soup, "category")    # 테마
     d["mechanisms"] = _links(soup, "mechanisms")  # 진행방식
-    d["types"] = _links(soup, "type")             # 전략/가족/파티/추상 등
     d["designers"] = _links(soup, "designer")     # 디자이너
     d["groups"] = _links(soup, "groups")          # 패밀리(테마/디지털구현/솔로규칙 혼재)
 
-    # 베스트·추천 인원 (.recommend-player 내부: "베스트:2인, 추천:3인").
-    # 범위형("2-3")도 있을 수 있어 문자열로 보존. 데이터 없으면 None.
-    rp = soup.select_one(".recommend-player")
-    rp_txt = rp.get_text(" ", strip=True) if rp else ""
-    bm = re.search(r"베스트\s*[:：]?\s*([\d\-]+)", rp_txt)
-    rm = re.search(r"추천\s*[:：]?\s*([\d\-]+)", rp_txt)
-    d["best_players"] = bm.group(1) if bm else None
-    d["recommended_players"] = rm.group(1) if rm else None
+    # 유형(전략/가족/파티/추상 등). 예전에는 /info/type/N 링크였지만 2026-08 개편으로
+    # 커뮤니티 투표 항목이 됐다. 값도 "전략게임"에서 "전략"으로 짧아졌다.
+    # 리스트로 유지하는 이유: 소비처(보들 그리드·정답 카드)가 이미 배열을 기대한다.
+    cat = _vote(soup, "category")
+    d["types"] = [cat] if cat else []
+
+    # 베스트·추천 인원. 같은 투표 블록의 "4인 / 2인" 형태. 범위형("2-3인")도 있을 수
+    # 있어 숫자 부분만 문자열로 보존한다. 투표가 없으면 None.
+    pv = _vote(soup, "player") or ""
+    parts = [p.strip() for p in pv.split("/")]
+    nums = [re.sub(r"[^\d\-]", "", p) or None for p in parts]
+    d["best_players"] = nums[0] if len(nums) > 0 else None
+    d["recommended_players"] = nums[1] if len(nums) > 1 else None
 
     # JSON-LD: 평가 수(인지도 신호) + 박스아트 이미지.
     ld = _ld_product(soup)

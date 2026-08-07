@@ -1,20 +1,39 @@
+"""games_detail_all.json(전수 크롤) → games_clean.json + 태그 이름 마스터.
+
+크롤 범위가 랭킹 목록 5,500개에서 **보드라이프 등록 전체**로 넓어졌다.
+정답 풀은 넓어지면 안 되므로 워커 `answer.ts`가 순위·평가 수로 자른다.
+여기서는 자르지 않는다 — 유사도 순위·자동완성은 전 게임을 대상으로 한다.
+"""
 import json
-d = json.load(open("games_detail.json", encoding="utf-8"))
+import os
+
+SRC = "games_detail_all.json"
+
+if not os.path.exists(SRC):
+    raise SystemExit(f"{SRC} 없음 — 먼저 `python crawl_all.py` 를 돌릴 것")
+
+d = json.load(open(SRC, encoding="utf-8"))
 ex = json.load(open("exclude_list.json", encoding="utf-8"))
 exclude_ids = {r["id"] for r in ex["exclude"]}
-clean = []
+
+clean, skipped = [], {"excluded": 0, "noname": 0}
 for gid, g in d.items():
     if gid in exclude_ids:
+        skipped["excluded"] += 1
+        continue
+    if not g.get("name_ko"):
+        skipped["noname"] += 1
         continue
     cats = g.get("categories", [])
     mechs = g.get("mechanisms", [])
+    rank = g.get("rank")
     clean.append({
         "id": int(gid),
         "name_ko": g.get("name_ko"),
         "name_en": g.get("name_en"),
         "year": g.get("year"),
-        "rank": g.get("rank"),
-        "rate": float(g["rate"]) if g.get("rate") else None,
+        "rank": rank,
+        "rate": g.get("rate"),
         "bgg_id": g.get("bgg_id"),
         # 엔진용 태그 (id) + 이름 마스터
         "categories": [c["id"] for c in cats],
@@ -46,4 +65,7 @@ for g in clean:
 json.dump(clean, open("games_clean.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 json.dump(catnames, open("category_names.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 json.dump(mechnames, open("mechanism_names.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-print("clean games:", len(clean), "| categories:", len(catnames), "| mechanisms:", len(mechnames))
+
+norank = sum(1 for g in clean if g["rank"] is None)
+print(f"clean games: {len(clean)} (순위 없음 {norank}) | skipped {skipped}")
+print(f"categories: {len(catnames)} | mechanisms: {len(mechnames)}")

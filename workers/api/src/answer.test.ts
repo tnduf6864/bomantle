@@ -5,6 +5,7 @@ import {
   buildAnswerPool,
   dailyAnswerFromSeed,
   kstDate,
+  POOL_MAX_RANK,
   puzzleNumber,
   RESET_HOUR,
 } from "./answer.ts";
@@ -45,6 +46,16 @@ test("buildAnswerPool: 자격 미달(평가<50·태그<2·weight 없음) 제외"
     mk({ id: 2, name_ko: "평가부족", rank: 11, weight: 2.5, categories: [1, 2], players_min: 2, review_count: 10 }),
     mk({ id: 3, name_ko: "태그부족", rank: 12, weight: 2.5, categories: [1], players_min: 2, review_count: 100 }),
     mk({ id: 4, name_ko: "무게없음", rank: 13, weight: null, categories: [1, 2], players_min: 2, review_count: 100 }),
+  ];
+  assert.deepEqual(buildAnswerPool(games), [1]);
+});
+
+test("buildAnswerPool: 순위가 POOL_MAX_RANK 밖이면 제외 (전수 크롤 유입분 차단)", () => {
+  const base = { weight: 2.5, categories: [1, 2], players_min: 2, review_count: 100 };
+  const games: Game[] = [
+    mk({ id: 1, name_ko: "목록권", rank: POOL_MAX_RANK, ...base }),
+    mk({ id: 2, name_ko: "목록밖", rank: POOL_MAX_RANK + 1, ...base }),
+    mk({ id: 3, name_ko: "순위없음", rank: null, ...base }),
   ];
   assert.deepEqual(buildAnswerPool(games), [1]);
 });

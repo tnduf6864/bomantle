@@ -37,12 +37,18 @@ test("아줄 → 아줄 시리즈가 상위", () => {
   assert.ok(top3.some((n) => (n ?? "").includes("아줄")), `top3=${top3}`);
 });
 
-test("결합 엔진: 쌍둥이 게임 고득점 (브라스 버밍엄 vs 랭커셔 ≈ 84.1)", () => {
+test("결합 엔진: 쌍둥이 게임 고득점 (브라스 버밍엄 vs 랭커셔 ≈ 89)", () => {
   // 테마 0.45 + 진행방식 0.30 + 수치 0.25 결합. 거의 동일 게임이라 매우 높음.
+  //
+  // ⚠️ 이 값은 **말뭉치 의존적**이다. 태그 가중치가 IDF라 전체 게임 수가 바뀌면
+  // 같은 두 게임의 점수도 움직인다. 실제로 수록 범위를 보드라이프 랭킹 목록(5,407개)에서
+  // 등록 게임 전체(21,194개)로 넓혔을 때 84.1 → 89로 올랐다(엔진 수식은 그대로).
+  // 데이터를 다시 만든 뒤 이 테스트가 깨지면 엔진 버그가 아니라 말뭉치 변화일 수 있으니
+  // 먼저 그쪽을 의심할 것.
   const birm = games.find((g) => g.name_ko === "브라스: 버밍엄")!;
   const lanc = games.find((g) => g.name_ko === "브라스: 랭커셔")!;
   const s = toScore(similarity(idx.byId.get(birm.id)!, idx.byId.get(lanc.id)!, idx));
-  assert.ok(Math.abs(s - 84.1) < 0.5, `got ${s}, expected ~84.1`);
+  assert.ok(Math.abs(s - 89) < 0.5, `got ${s}, expected ~89`);
 });
 
 test("랭킹은 내림차순 정렬", () => {

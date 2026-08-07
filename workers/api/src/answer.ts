@@ -45,8 +45,18 @@ function baseName(g: Game): string {
 }
 
 /**
+ * 정답 풀에 들어올 수 있는 보드라이프 종합 순위 상한.
+ *
+ * 데이터셋이 랭킹 목록(상위 5,500)에서 **보드라이프 등록 전체**(~2만)로 넓어지면서
+ * `rank != null`이 더 이상 아무것도 걸러내지 못하게 됐다. 예전에는 "데이터에 있다"가
+ * 곧 "목록권 안"이었지만 지금은 순위가 전 게임에 붙기 때문이다. 그 경계를 명시적으로
+ * 되살린 값 — 유사도 순위·자동완성은 전체를 쓰되 **정답만** 여기 안에서 고른다.
+ */
+export const POOL_MAX_RANK = 5500;
+
+/**
  * 정답 후보 풀. 잘 알려지고 단독 플레이 가능한 게임만:
- *  - 랭킹/난이도/인원 데이터 존재, 태그 2개 이상
+ *  - 종합 순위 POOL_MAX_RANK 이내, 난이도/인원 데이터 존재, 태그 2개 이상
  *  - 평가 수 minReviews개 이상 (마이너·인지도 낮은 게임 정답에서 제외)
  *  - 같은 프랜차이즈는 가장 높은 랭킹 1개만 (아줄:신트라 등 확장 제외)
  *  - 랭킹 상위 위주(기본 1200개)
@@ -58,6 +68,7 @@ export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): n
   const eligible = games.filter(
     (g) =>
       g.rank != null &&
+      g.rank <= POOL_MAX_RANK &&
       g.weight != null &&
       g.categories.length >= 2 &&
       g.players_min != null &&

@@ -1,5 +1,10 @@
+"""머더미스터리 **시나리오 키트**를 골라 exclude_list.json 을 만든다(정통 추리게임은 유지).
+
+전수 크롤로 바뀐 뒤에는 대상이 5,500개가 아니라 등록 게임 전체다. 키트류가 대부분
+목록 바깥(순위 하위)에 있었으므로 제외 건수가 크게 는다 — build_clean.py 전에 다시 돌릴 것.
+"""
 import json,re
-d=json.load(open("games_detail.json",encoding="utf-8"))
+d=json.load(open("games_detail_all.json",encoding="utf-8"))
 def has24(g): return any(c["id"]==24 for c in g.get("categories",[]))
 # 시나리오 키트 시리즈명 (전역 적용)
 KIT=re.compile(r"미스터리\s*파티|머더\s*미스터리\s*미니|머더미스터리|머더\s*미스테리|탁상탐정단|인사이드\s*팩트",re.I)
