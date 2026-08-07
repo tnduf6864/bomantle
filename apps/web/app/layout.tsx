@@ -62,8 +62,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         {/*
-          SEO 설명 섹션은 **각 게임 페이지가 직접 렌더한다**(app/page.tsx, app/bodle/page.tsx).
-          여기 두면 보들 페이지 하단에도 보맨틀 설명이 붙어 내용이 어긋난다.
+          SEO 설명 섹션은 **각 페이지가 직접 렌더한다**(app/page.tsx).
+          여기 두면 라우트를 늘렸을 때 엉뚱한 페이지 하단에도 붙어 내용이 어긋난다.
         */}
         {children}
 

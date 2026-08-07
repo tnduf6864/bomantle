@@ -1,12 +1,11 @@
 // 보맨틀 서비스워커 — 앱셸 + 정적 데이터 오프라인 캐시.
 // 정답 API는 크로스오리진(워커 도메인)이라 same-origin 필터에서 자동 제외됨 → 캐시 안 됨.
 // 배포로 앱셸/데이터가 바뀌면 CACHE 버전을 올려 이전 캐시를 폐기한다.
-const CACHE = "bomantle-v5";
+const CACHE = "bomantle-v6";
 
 // 안정 URL만 사전 캐시. _next 해시 자산은 첫 요청 시 런타임 캐시(cache-first)로 담긴다.
 const SHELL = [
   "/",
-  "/bodle",
   "/games.json",
   "/categories.json",
   "/manifest.webmanifest",
@@ -43,8 +42,8 @@ self.addEventListener("fetch", (e) => {
 
   // 문서(내비게이션): 네트워크 우선 → 실패 시 캐시된 앱셸로 폴백.
   //
-  // ⚠️ 응답은 **경로별로** 담는다. 예전처럼 무조건 "/"에 넣으면 /bodle을 한 번만
-  // 방문해도 홈의 오프라인 셸이 보들 페이지로 덮여 버린다(라우트가 하나일 때는
+  // ⚠️ 응답은 **경로별로** 담는다. 무조건 "/"에 넣으면 다른 라우트를 한 번만
+  // 방문해도 홈의 오프라인 셸이 그 페이지로 덮여 버린다(라우트가 하나일 때는
   // 드러나지 않던 버그). 모르는 경로는 "/"로 폴백해 SPA처럼 동작시킨다.
   if (req.mode === "navigate") {
     const shellPath = url.pathname.replace(/\/+$/, "") || "/";

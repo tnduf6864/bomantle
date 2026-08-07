@@ -43,8 +43,7 @@ import {
   GUESS_BUCKETS,
   type Stats,
 } from "../lib/stats";
-// 기기 식별자는 보들과 같은 정의를 쓴다(같은 키 `bomantle:cid`).
-import { deviceId } from "../lib/bodle";
+import { deviceId } from "../lib/device";
 import { FEEDBACK_URL } from "../lib/constants";
 import { RESET_HOUR, clientPuzzleDate, msUntilNextReset, formatCountdown } from "../lib/reset";
 import { useKeyboardInsets, useScrollInputIntoView } from "../lib/keyboard";
@@ -110,7 +109,7 @@ const RANK_PAGE = 100;
 // 요청이 몰리지 않게 막는다.
 const PCT_REFRESH_MS = 60_000;
 
-/** 백분위 카드에 붙일 힌트 개수별 정답자 분포(보들은 추측 횟수별을 쓴다). */
+/** 백분위 카드에 붙일 힌트 개수별 정답자 분포. */
 function hintDistRows(info: PercentileResult) {
   return info.hintDist.map((c, h) => ({
     label: `${h}개`,
@@ -830,11 +829,6 @@ export default function Page() {
         </div>
       )}
 
-      {/* 자매 게임 유도. 오늘 판을 끝낸 사람이 이어서 할 거리를 준다. */}
-      <a className="sister-link" href="/bodle">
-        🎲 <b>보들</b> — 다섯 단서로 오늘의 보드게임 맞히기 →
-      </a>
-
       <footer className="site-footer">
         <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer">
           💬 문의·제보
@@ -1013,15 +1007,7 @@ export default function Page() {
         </dd>
         <dt>정답을 찾을 자신이 없으면요?</dt>
         <dd>포기 버튼으로 언제든 정답을 확인하고 다음 날 새 문제로 넘어갈 수 있습니다.</dd>
-        <dt>보들은 뭔가요?</dt>
-        <dd>
-          같은 데이터로 만든 자매 게임입니다. 유사도 점수 대신 유형·테마·진행방식·무게·
-          출시연도 다섯 가지 단서로 오늘의 보드게임을 6번 안에 맞히는 워들(Wordle) 방식입니다.
-        </dd>
       </dl>
-      <p>
-        <a href="/bodle">보들 하러 가기 →</a>
-      </p>
     </section>
     </>
   );

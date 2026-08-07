@@ -1,6 +1,6 @@
 # 보맨틀 — 남은 작업 (다음 세션용)
 
-> 현재 상태: 모노레포 5개 영역 모두 구현·검증 완료. data(5,407개) / packages/core(테스트 5/5) /
+> 현재 상태: 모노레포 5개 영역 모두 구현·검증 완료. data(21,194개) / packages/core(테스트 5/5) /
 > workers/api(guess 흐름 검증) / apps/web(정적 export 빌드 성공). 로컬 플레이 가능.
 > 구조·실행법은 [README.md](./README.md) 참고.
 
@@ -85,8 +85,8 @@ weight/players 있고 태그≥2 + 평가 50+, 프랜차이즈 최상위 1개만
     **아래로** 펼쳐지므로 가운데에 두면 후보 절반이 키보드 뒤로 넘어간다
   - ⚠️ **가려졌을 때만** 스크롤한다. 포커스마다 무조건 올리면 키보드 없는 데스크톱에서
     입력창을 클릭할 때마다 화면이 위로 튄다(실제로 처음 그렇게 짰다가 잡음)
-  - 보맨틀·보들 양쪽에 적용. 실기기 최종 확인은 남아 있음 — 데스크톱 Chrome엔 가상 키보드가
-    없어 visualViewport를 주입해 판정 로직만 검증했다
+  - 실기기 최종 확인은 남아 있음 — 데스크톱 Chrome엔 가상 키보드가 없어
+    visualViewport를 주입해 판정 로직만 검증했다
 - [x] **자동완성 후보 8 → 30개** (`SUGGEST_LIMIT`) — 시리즈가 긴 검색어("브라스")에서 찾던 편이
       잘려 나갔다. `.suggest`에 자체 스크롤(max-height)을 줘서 길어져도 화면을 밀지 않고,
       ↑↓ 이동 시 선택 항목이 접힌 영역에 숨지 않게 목록만 따라 스크롤한다
@@ -148,24 +148,7 @@ weight/players 있고 태그≥2 + 평가 50+, 프랜차이즈 최상위 1개만
 - [x] GitHub Actions `.github/workflows/ci.yml` — install → core/api typecheck+test → web build
 - [x] 워커 tsconfig에서 `*.test.ts` 제외(Node 타입 vs workers-types 분리, 배포 번들 무관)
 
-## 9. 보들(보드게임 Wordle) — 구현됨, 배포 전
-
-> 자매 게임. 설계 근거·측정치·구현 현황은 [docs/bodle-plan.md](./docs/bodle-plan.md) 참고.
-> 규칙은 `workers/api/src/bodle.ts`, 화면은 `apps/web/app/bodle/`.
-
-- [x] 순수 로직 + 테스트 19건 (피드백 판정, 요일 티어, 남은 후보 수, 입력 검증)
-- [x] 워커 라우트 4개 (`/api/bodle/today|guess|result|stats`) — `wrangler dev` 검증
-- [x] `/bodle` 페이지 — 그리드, 자동완성 재사용, 진행 복원, 공유, 오늘의 현황
-- [x] 웹 로직 테스트 11건 / SEO 메타·설명 섹션 / 보맨틀 ↔ 보들 상호 링크
-- [ ] **배포** — 워커 재배포 + Pages 재배포. `sw.js`는 이미 `bomantle-v4`로 올려둠
-- [ ] 하드 모드 (드러난 단서와 모순되는 게임 제출 차단)
-- [ ] 아카이브(지난 회차) — 신규 유입에겐 이게 재방문의 핵심
-- [ ] 실제 플레이 데이터로 `TUNING` 재검토 (6회내 성공률 실측)
-
-> ⚠️ 보들 정답 시드는 `bodle:${date}` 접두사로 보맨틀과 분리돼 있다. 이걸 빼면
-> 보맨틀 8단계 힌트가 보들 정답을 그대로 흘린다. 테스트(`bodle.test.ts`)가 지키고 있음.
-
-## 10. (나중) Expo 모바일 앱
+## 9. (나중) Expo 모바일 앱
 
 - [ ] `apps/mobile` (Expo) 추가, `packages/core` + 같은 Worker API 재사용
 - [ ] 화면은 웹 UI 이식
@@ -187,6 +170,6 @@ weight/players 있고 태그≥2 + 평가 50+, 프랜차이즈 최상위 1개만
   `/rank/N` 목록 페이지(→ 무한 스크롤로 개편, `crawl_all.py`로 대체), 유형 `/info/type/N`,
   베스트/추천 인원 `.recommend-player`. 뒤 둘은 `.gvs-list` 커뮤니티 투표 블록으로 옮겨갔다
   (`crawl_detail._vote`). **크롤 후에는 필드별 결측률을 꼭 확인할 것** — 이번에도 파서가 조용히
-  빈 값을 채웠고 워커 테스트(`bodle.test.ts` "모든 열이 hit")가 잡아냈다.
+  빈 값을 채웠고 워커 테스트가 잡아냈다.
 - 유형(types)은 이제 값이 **하나뿐**이고 이름도 짧아졌다("전략게임" → "전략"). 옛 `/info/type/`은
-  복수 값이 가능했다. 보들 types 열의 변별력이 그만큼 줄었다.
+  복수 값이 가능했다.

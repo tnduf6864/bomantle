@@ -10,7 +10,7 @@ function todayWinRate(s: TodayStats): number {
 /**
  * 오늘의 전체 현황(익명 집계). 개인 통계(localStorage)와 달리 서버 집계이고,
  * **분모에 포기까지 포함**한다 — 분포 막대는 정답자 기준이므로 라벨로 구분해 둔다.
- * @param buckets 표시할 버킷만 골라서 넘긴다(보들은 최대 8회라 앞쪽 버킷만 의미 있음).
+ * @param buckets 표시할 버킷만 골라서 넘긴다.
  */
 export function TodayStatsCard({
   info,

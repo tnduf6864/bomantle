@@ -19,16 +19,6 @@ import { buildHint, type FullGame } from "./hint.ts";
 import { buildAnswerInfo } from "./reveal.ts";
 import { parsePage, sliceRanking } from "./ranklist.ts";
 import { sanitizeSubmission } from "./rank.ts";
-import {
-  TUNING as BODLE,
-  bodlePool,
-  bodleAnswerFromSeed,
-  compareBodle,
-  remainingCount,
-  sanitizeGuesses,
-  tierFor,
-  type BodleTurn,
-} from "./bodle.ts";
 import { ResultBoard } from "./results.ts";
 import { VisitCounter } from "./visits.ts";
 
@@ -42,8 +32,6 @@ const mechanisms = mechData as Record<string, string>;
 // 콜드 스타트 1회: 인덱스 + 정답 풀 구성 (isolate 동안 재사용)
 const index = buildIndex(games);
 const pool = buildAnswerPool(games);
-// 보들은 게임 원본(FullGame)을 반복 조회하므로 id 맵을 미리 만든다.
-const gameById = new Map<number, FullGame>(games.map((g) => [g.id, g]));
 // 재호스팅된 박스아트가 있는 게임 id (빌드 시 data 스크립트가 생성).
 const boxartSet = new Set<number>(boxartIds as number[]);
 
@@ -89,37 +77,6 @@ async function getDayState(env: Env, date: string): Promise<DayState> {
     rankCache.set(answerId, rc);
   }
   return { date, answerId, ranking: rc.ranking, pos: rc.pos };
-}
-
-// --- 보들(보드게임 Wordle) -------------------------------------------------
-// 보맨틀과 데이터·날짜 경계는 공유하되 정답은 완전히 분리된다. 자세한 설계는
-// docs/bodle-plan.md, 규칙은 bodle.ts 참고.
-
-// 요일 티어(50/100/200)별 풀. 종류가 3개뿐이라 isolate에 캐시해 둔다.
-const bodlePoolCache = new Map<number, number[]>();
-
-function bodlePoolFor(date: string): number[] {
-  const tier = tierFor(date);
-  let p = bodlePoolCache.get(tier);
-  if (!p) {
-    p = bodlePool(games, date);
-    bodlePoolCache.set(tier, p);
-  }
-  return p;
-}
-
-/**
- * 오늘 보들의 정답 id. 보맨틀과 **KV 키도 다르다**(`bodle:answer:` 접두).
- * 같은 키를 쓰면 한쪽 오버라이드가 다른 쪽 정답까지 바꿔 버린다.
- */
-async function bodleAnswerId(env: Env, date: string): Promise<number> {
-  const p = bodlePoolFor(date);
-  if (env.ANSWERS) {
-    const v = await env.ANSWERS.get(`bodle:answer:${date}`, { cacheTtl: KV_CACHE_TTL });
-    const id = Number(v);
-    if (v && Number.isFinite(id) && gameById.has(id)) return id;
-  }
-  return bodleAnswerFromSeed(date, p);
 }
 
 // 오늘 접속자 수. 바인딩 없음(로컬 등)·DO 오류 시 null — 게임 진행에는 영향 없음.
@@ -289,107 +246,6 @@ export default {
         return json(await board.snapshot(), req, 200, {
           // 하루 내내 값이 늘어나므로 짧게만 캐시한다. 브라우저 재조회(모달 재오픈)에서
           // DO 호출을 아끼는 게 주 목적.
-          "Cache-Control": `public, max-age=${STATS_CACHE_TTL}`,
-        });
-      } catch {
-        return json({ available: false }, req);
-      }
-    }
-
-    // GET /api/bodle/today — 오늘 보들 메타 (정답 비노출)
-    if (url.pathname === "/api/bodle/today" && req.method === "GET") {
-      return json(
-        {
-          date,
-          puzzleNumber: puzzleNumber(date),
-          maxGuesses: BODLE.maxGuesses,
-          poolSize: bodlePoolFor(date).length,
-          remainingFromTurn: BODLE.remainingFromTurn,
-        },
-        req,
-      );
-    }
-
-    // POST /api/bodle/guess { guesses: number[] } — 추측 **전체 목록**을 받아
-    // 열별 피드백을 전부 되돌려준다. 클라는 id 목록만 저장하면 되고, 새로고침
-    // 복원도 "목록 재전송"으로 끝난다. 정답 속성은 절대 내려보내지 않는다.
-    if (url.pathname === "/api/bodle/guess" && req.method === "POST") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "invalid body" }, req, 400);
-      }
-      const ids = sanitizeGuesses(body);
-      if (!ids) return json({ error: "invalid body" }, req, 400);
-      if (ids.some((id) => !gameById.has(id))) {
-        return json({ error: "unknown game" }, req, 404);
-      }
-
-      const answerId = await bodleAnswerId(env, date);
-      const answer = gameById.get(answerId)!;
-      const guessed = ids.map((id) => gameById.get(id)!);
-
-      const turns: BodleTurn[] = guessed.map((g) => ({
-        gameId: g.id,
-        feedback: compareBodle(g, answer),
-        correct: g.id === answerId,
-      }));
-
-      const solved = turns.some((t) => t.correct);
-      const finished = solved || turns.length >= BODLE.maxGuesses;
-
-      // 남은 후보는 3회차부터. **개수만** 준다(목록을 주면 눈으로 훑는 노동이 된다).
-      let remaining: number | null = null;
-      if (!finished && turns.length >= BODLE.remainingFromTurn) {
-        const poolGames = bodlePoolFor(date).map((id) => gameById.get(id)!);
-        remaining = remainingCount(poolGames, guessed, answer);
-      }
-
-      return json(
-        {
-          turns,
-          solved,
-          finished,
-          remaining,
-          // 끝났을 때만 정답 공개 (맞힘·소진 공용)
-          ...(finished ? { answer: revealAnswer(answerId) } : {}),
-        },
-        req,
-      );
-    }
-
-    // POST /api/bodle/result { cid, guesses, solved } — 보들 집계.
-    // ResultBoard를 그대로 쓰되 **DO 인스턴스 이름을 분리**해 보맨틀 통계와 섞이지
-    // 않게 한다. 보들에는 힌트가 없으므로 hints는 항상 0.
-    if (url.pathname === "/api/bodle/result" && req.method === "POST") {
-      let body: unknown;
-      try {
-        body = await req.json();
-      } catch {
-        return json({ error: "invalid body" }, req, 400);
-      }
-      const sub = sanitizeSubmission(body);
-      // 보들은 시도 상한이 8이라 rank.ts의 넉넉한 상한(500)만으로는 부족하다.
-      if (!sub || sub.hints !== 0 || sub.guesses > BODLE.maxGuesses) {
-        return json({ error: "invalid body" }, req, 400);
-      }
-
-      if (!env.RESULTS) return json({ available: false }, req);
-      try {
-        const board = env.RESULTS.get(env.RESULTS.idFromName(`bodle:${date}`));
-        return json(await board.submit(sub), req);
-      } catch {
-        return json({ available: false }, req);
-      }
-    }
-
-    // GET /api/bodle/stats — 오늘 보들 전체 현황(익명 집계). 쓰기 없음.
-    if (url.pathname === "/api/bodle/stats" && req.method === "GET") {
-      if (!env.RESULTS) return json({ available: false }, req);
-      try {
-        const board = env.RESULTS.get(env.RESULTS.idFromName(`bodle:${date}`));
-        return json(await board.snapshot(), req, 200, {
           "Cache-Control": `public, max-age=${STATS_CACHE_TTL}`,
         });
       } catch {

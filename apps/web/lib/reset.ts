@@ -1,5 +1,5 @@
 // 매일 게임이 초기화되는 시각(Asia/Seoul 기준) 관련 순수 함수.
-// 보맨틀·보들 둘 다 같은 KST 오전 9시 경계를 쓴다 — 백엔드 RESET_HOUR과 일치시킬 것.
+// KST 오전 9시 경계 — 백엔드 RESET_HOUR과 일치시킬 것.
 
 export const RESET_HOUR = 9;
 

@@ -61,8 +61,7 @@ export const POOL_MAX_RANK = 5500;
  *  - 같은 프랜차이즈는 가장 높은 랭킹 1개만 (아줄:신트라 등 확장 제외)
  *  - 랭킹 상위 위주(기본 1200개)
  *
- * `minReviews`는 보들(bodle.ts)의 요일별 난이도 티어용이다. 보맨틀은 기본값 50만 쓴다.
- * 실측 풀 크기: 50→551개, 100→313개, 200→143개.
+ * 실측 풀 크기(전수 크롤 21,194개 기준): minReviews 50→565개, 100→322개, 200→145개.
  */
 export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): number[] {
   const eligible = games.filter(
