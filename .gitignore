@@ -16,7 +16,14 @@ data/__pycache__/
 
 # large intermediate crawl files (keep final artifacts in data/out)
 data/games_detail.json
+data/games_detail_all.json
+data/dead_ids.json
+data/patched_ids.json
 data/games_list.json
+# build_clean.py 산출 중간물. build_artifacts.py가 이걸 읽어 data/out을 만들고,
+# 최종본은 workers/api/src·apps/web/public으로 복사되므로 저장소에 둘 이유가 없다.
+# (전수 크롤 이후 17MB로 커져서 추적에서 뺐다 — 재생성은 build_clean.py 한 번)
+data/games_clean.json
 data/*.html
 data/*.log
 
@@ -33,3 +40,6 @@ data/*.log
 # codegraph local index / editor rules (재생성 가능)
 .codegraph/
 .cursor/
+
+# 예약 배포 스크립트 로그
+deploy.log

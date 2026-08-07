@@ -13,7 +13,13 @@ apps/web        Next.js (정적 export → CF Pages). 꼬맨틀식 UI
 data            Python 크롤 파이프라인 (보드라이프 → games.json)
 ```
 
-데이터 흐름: `data/out/games.json` (5,407개) → 워커 번들 + 웹 public 으로 복사.
+데이터 흐름: `data/out/games.json` → 워커 번들 + 웹 public 으로 복사.
+
+수록 범위는 **보드라이프에 등록된 게임 전부**다. 예전에는 랭킹 목록(/rank/N) 5,500개만
+받았는데, 목록에 없는 게임도 상세 페이지는 멀쩡하고 종합 순위까지 붙어 있어서
+id를 전수 스윕한다(`crawl_all.py`). 대신 **정답 풀은 넓히지 않는다** — 유사도 순위와
+자동완성만 전체를 쓰고, 정답은 `answer.ts`의 `POOL_MAX_RANK`(종합 5,500위) + 평가 수
+50개 이상 조건 안에서만 고른다.
 
 ## 개발 실행
 
@@ -38,9 +44,9 @@ pnpm -r typecheck
 
 ```bash
 cd data
-./.venv/Scripts/python crawl_list.py      # 보드라이프 명단
-./.venv/Scripts/python crawl_detail.py    # 상세(BGG id·테마·진행방식·인원/난이도·평가수·이미지)
-./.venv/Scripts/python build_clean.py     # 머더 키트 제외 → games_clean.json (+ category/mechanism 이름맵)
+./.venv/Scripts/python crawl_all.py       # 보드라이프 등록 게임 전수(id 1..MAX 스윕, ~80분·재시작 가능)
+./.venv/Scripts/python build_exclude.py   # 머더미스터리 시나리오 키트 선별 → exclude_list.json
+./.venv/Scripts/python build_clean.py     # 키트 제외 → games_clean.json (+ category/mechanism 이름맵)
 ./.venv/Scripts/python build_artifacts.py # → out/{games.json(풀), games.web.json(슬림), categories.json, mechanisms.json}
 # build_artifacts.py가 out/ 생성 후 워커·웹 소비처로 자동 복사한다:
 #   out/games.json      → workers/api/src/games.json   (풀: 엔진+힌트+큐레이션. 진행방식·평가수 포함)
@@ -64,7 +70,7 @@ pnpm --filter @bomantle/web exec wrangler pages deploy out --project-name bomant
 
 ### 일일 정답 관리
 
-- 기본: 날짜 시드 결정론으로 정답 풀(평가 50+ · 프랜차이즈 중복 제거, ~551개)에서 자동 선택.
+- 기본: 날짜 시드 결정론으로 정답 풀(종합 5,500위 이내 · 평가 50+ · 프랜차이즈 중복 제거)에서 자동 선택.
 - 수동 지정: KV에 `answer:YYYY-MM-DD = <gameId>` 저장하면 그날 정답을 덮어씀.
 
 ## 비고 / TODO
