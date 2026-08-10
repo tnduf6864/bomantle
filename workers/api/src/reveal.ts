@@ -19,6 +19,7 @@ export interface AnswerInfo {
   players_max: number | null;
   best_players: string | null;
   time_min: number | null;
+  time_max: number | null;
   age: number | null;
   types: string[];
   /** 테마 태그 이름 */
@@ -59,6 +60,7 @@ export function buildAnswerInfo(
     players_max: g.players_max,
     best_players: g.best_players ?? null,
     time_min: g.time_min,
+    time_max: g.time_max,
     age: g.age,
     types: g.types ?? [],
     categories: tagNames(g.categories, cats),

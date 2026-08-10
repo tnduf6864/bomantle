@@ -60,7 +60,7 @@ export function buildIndex(games: Game[]): GameIndex {
       mvec: m.vec,
       mnorm: m.norm,
       weight: g.weight,
-      timeMin: g.time_min,
+      timeMax: g.time_max,
       playersMin: g.players_min,
       playersMax: g.players_max,
     });
@@ -106,9 +106,9 @@ export function numericSim(a: IndexedGame, b: IndexedGame, weightMean: number): 
   const w2 = b.weight ?? weightMean;
   sims.push(Math.max(0, 1 - Math.abs(w1 - w2) / 2.5));
 
-  // 플레이 시간: 로그 스케일
-  if (a.timeMin && b.timeMin) {
-    const d = Math.abs(Math.log10(a.timeMin + 1) - Math.log10(b.timeMin + 1));
+  // 플레이 시간: 로그 스케일. 상한값 기준(IndexedGame.timeMax 주석 참고)
+  if (a.timeMax && b.timeMax) {
+    const d = Math.abs(Math.log10(a.timeMax + 1) - Math.log10(b.timeMax + 1));
     sims.push(Math.max(0, 1 - d / 1.0));
   }
 

@@ -47,8 +47,9 @@ def num_sim(g1, g2):
     w1 = g1["weight"] or W_MEAN
     w2 = g2["weight"] or W_MEAN
     sims.append(max(0.0, 1 - abs(w1 - w2) / 2.5))
-    # 플레이 시간: 로그 스케일
-    t1, t2 = g1["time_min"], g2["time_min"]
+    # 플레이 시간: 로그 스케일. TS 엔진과 같이 **상한**을 쓴다
+    # (packages/core/src/types.ts 의 IndexedGame.timeMax 주석 참고)
+    t1, t2 = g1.get("time_max"), g2.get("time_max")
     if t1 and t2:
         sims.append(max(0.0, 1 - abs(math.log10(t1 + 1) - math.log10(t2 + 1)) / 1.0))
     # 인원 범위 겹침 (Jaccard)

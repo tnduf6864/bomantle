@@ -2,7 +2,11 @@
 
 크롤 범위가 랭킹 목록 5,500개에서 **보드라이프 등록 전체**로 넓어졌다.
 정답 풀은 넓어지면 안 되므로 워커 `answer.ts`가 순위·평가 수로 자른다.
-여기서는 자르지 않는다 — 유사도 순위·자동완성은 전 게임을 대상으로 한다.
+여기서는 순위로 자르지 않는다 — 유사도 순위·자동완성은 전 게임을 대상으로 한다.
+
+다만 **확장은 여기서 완전히 뺀다**(expansion_list.json). 본판 없이는 못 노는
+게임이라 추측·자동완성 대상으로도 의미가 없기 때문이다. 정답 풀에는 원래도
+확장이 없었다 — answer.ts 의 `rank <= 5500` + 프랜차이즈 중복제거가 이미 걸렀다.
 """
 import json
 import os
@@ -15,11 +19,16 @@ if not os.path.exists(SRC):
 d = json.load(open(SRC, encoding="utf-8"))
 ex = json.load(open("exclude_list.json", encoding="utf-8"))
 exclude_ids = {r["id"] for r in ex["exclude"]}
+xp = json.load(open("expansion_list.json", encoding="utf-8"))
+expansion_ids = {r["id"] for r in xp["expansions"]}
 
-clean, skipped = [], {"excluded": 0, "noname": 0}
+clean, skipped = [], {"excluded": 0, "expansion": 0, "noname": 0}
 for gid, g in d.items():
     if gid in exclude_ids:
         skipped["excluded"] += 1
+        continue
+    if gid in expansion_ids:
+        skipped["expansion"] += 1
         continue
     if not g.get("name_ko"):
         skipped["noname"] += 1
@@ -45,6 +54,7 @@ for gid, g in d.items():
         "players_min": g.get("players_min"),
         "players_max": g.get("players_max"),
         "time_min": g.get("time_min"),
+        "time_max": g.get("time_max"),
         "age": g.get("age"),
         # 힌트/큐레이션용
         "review_count": g.get("review_count"),

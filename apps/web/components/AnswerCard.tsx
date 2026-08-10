@@ -14,7 +14,13 @@ export function answerSpecs(a: AnswerInfo): { label: string; value: string; wide
         : `${a.players_min}-${a.players_max}명`;
   push("출시", a.year);
   push("인원", players && a.best_players ? `${players} (베스트 ${a.best_players}인)` : players);
-  push("플레이타임", a.time_min ? `${a.time_min}분` : null);
+  const playtime =
+    a.time_min == null
+      ? null
+      : a.time_max != null && a.time_max !== a.time_min
+        ? `${a.time_min}-${a.time_max}분`
+        : `${a.time_min}분`;
+  push("플레이타임", playtime);
   push("난이도", a.weight != null ? `${a.weight.toFixed(2)} / 5` : null);
   push("연령", a.age != null ? `${a.age}세 이상` : null);
   push("평점", a.rate != null ? a.rate.toFixed(1) : null);

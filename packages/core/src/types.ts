@@ -15,7 +15,10 @@ export interface Game {
   weight: number | null;
   players_min: number | null;
   players_max: number | null;
+  /** 플레이타임 하한(분). 보드라이프가 "50-140분"처럼 범위로 주면 그 앞쪽 값. */
   time_min: number | null;
+  /** 플레이타임 상한(분). 단일값 표기면 time_min과 같다. */
+  time_max: number | null;
   age: number | null;
   /** 평가 수(인지도 신호). 정답 풀 큐레이션용 */
   review_count?: number | null;
@@ -33,7 +36,14 @@ export interface IndexedGame {
   /** |mvec| (진행방식 코사인 분모용 사전 계산) */
   mnorm: number;
   weight: number | null;
-  timeMin: number | null;
+  /**
+   * 시간 유사도용 대표값 = 플레이타임 **상한**.
+   *
+   * 예전 크롤러가 "50-140분"에서 상한만 뽑아 time_min이라는 이름으로 저장했고,
+   * 유사도는 줄곧 그 값으로 계산돼 왔다. 범위 파싱을 고친 뒤에도 같은 값을 쓰도록
+   * time_max에 붙여 둔다 — 하한으로 바꾸면 기존 순위가 통째로 흔들린다.
+   */
+  timeMax: number | null;
   playersMin: number | null;
   playersMax: number | null;
 }

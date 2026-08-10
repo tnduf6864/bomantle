@@ -14,7 +14,10 @@ export interface GameMeta {
   weight: number | null;
   players_min: number | null;
   players_max: number | null;
+  /** 플레이타임 하한(분) — 보드라이프가 "50-140분"처럼 범위로 주면 그 앞쪽 값 */
   time_min: number | null;
+  /** 플레이타임 상한(분). 단일값 표기면 time_min과 같다 */
+  time_max: number | null;
   age: number | null;
 }
 
@@ -33,6 +36,7 @@ export interface AnswerInfo {
   players_max: number | null;
   best_players: string | null;
   time_min: number | null;
+  time_max: number | null;
   age: number | null;
   types: string[];
   /** 테마 태그 이름 */

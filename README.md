@@ -46,13 +46,19 @@ pnpm -r typecheck
 cd data
 ./.venv/Scripts/python crawl_all.py       # 보드라이프 등록 게임 전수(id 1..MAX 스윕, ~80분·재시작 가능)
 ./.venv/Scripts/python build_exclude.py   # 머더미스터리 시나리오 키트 선별 → exclude_list.json
-./.venv/Scripts/python build_clean.py     # 키트 제외 → games_clean.json (+ category/mechanism 이름맵)
+./.venv/Scripts/python build_expansion.py # 확장(카테고리 55 "본판이 필요한 확장") 선별 → expansion_list.json
+./.venv/Scripts/python build_clean.py     # 키트·확장 제외 → games_clean.json (+ category/mechanism 이름맵)
 ./.venv/Scripts/python build_artifacts.py # → out/{games.json(풀), games.web.json(슬림), categories.json, mechanisms.json}
 # build_artifacts.py가 out/ 생성 후 워커·웹 소비처로 자동 복사한다:
 #   out/games.json      → workers/api/src/games.json   (풀: 엔진+힌트+큐레이션. 진행방식·평가수 포함)
 #   out/games.web.json  → apps/web/public/games.json   (슬림: 클라 자동완성·표시용)
 #   out/categories.json → workers/api/src/ 및 apps/web/public/
 #   out/mechanisms.json → workers/api/src/ (힌트용)
+
+# 필드만 고쳐야 할 때는 전수 크롤 대신 패치 스크립트를 쓴다(원본 HTML을 남기지 않아
+# 재파싱이 안 되므로 해당 필드만 다시 받는다):
+./.venv/Scripts/python patch_time.py      # 플레이타임 time_min/time_max 재수집(확장 제외 ~65분)
+./.venv/Scripts/python patch_votes.py     # 유형·베스트/추천 인원 재수집
 ```
 
 ## 배포 (Cloudflare)

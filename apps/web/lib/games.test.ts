@@ -29,6 +29,7 @@ function db(rows: Row[]) {
       players_min: null,
       players_max: null,
       time_min: null,
+      time_max: null,
       age: null,
     })),
     {},

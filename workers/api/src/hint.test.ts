@@ -9,14 +9,14 @@ const games: FullGame[] = [
   {
     id: 1, name_ko: "카탄", name_en: "Catan", year: "1995", rank: 1, rate: null,
     bgg_id: null, categories: [10, 20], mechanisms: [100, 200], weight: 2.31,
-    players_min: 3, players_max: 4, time_min: 75, age: 10, review_count: 1000,
+    players_min: 3, players_max: 4, time_min: 60, time_max: 90, age: 10, review_count: 1000,
     types: ["전략게임"], designers: ["클라우스 토이버"], best_players: "4",
     recommended_players: "3-4", image: null,
   },
   {
     id: 2, name_ko: "윙스팬", name_en: "Wingspan", year: "2019", rank: 2, rate: null,
     bgg_id: null, categories: [20, 30], mechanisms: [200, 300], weight: 2.44,
-    players_min: 1, players_max: 5, time_min: 70, age: 10, review_count: 900,
+    players_min: 1, players_max: 5, time_min: 70, time_max: 70, age: 10, review_count: 900,
     types: ["전략게임"], designers: ["엘리자베스 하그레이브"], best_players: "2",
     recommended_players: "2-3", image: null,
   },
@@ -27,8 +27,19 @@ const mechs: Record<string, string> = { "100": "주사위", "200": "교역", "30
 const g = games[0];
 const v = (lvl: number) => buildHint(lvl, g, idx, cats, mechs).value;
 
-test("레벨1 인원·시간", () => {
-  assert.equal(v(1), "3-4명 · 75분");
+test("레벨1 인원·시간 — 범위 표기", () => {
+  assert.equal(v(1), "3-4명 · 60-90분");
+});
+test("레벨1 시간 — 상·하한이 같으면 단일값", () => {
+  assert.equal(buildHint(1, games[1], idx, cats, mechs).value, "1-5명 · 70분");
+});
+test("레벨1 시간 — time_max가 없으면 하한만", () => {
+  const noMax = { ...g, time_max: null };
+  assert.equal(buildHint(1, noMax, idx, cats, mechs).value, "3-4명 · 60분");
+});
+test("레벨1 시간 — 시간 정보가 없으면 인원만", () => {
+  const noTime = { ...g, time_min: null, time_max: null };
+  assert.equal(buildHint(1, noTime, idx, cats, mechs).value, "3-4명");
 });
 test("레벨2 타입·테마 — 가장 흔한 카테고리(경제) 노출", () => {
   assert.equal(v(2), "전략게임 · 경제");

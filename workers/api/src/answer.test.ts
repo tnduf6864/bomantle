@@ -14,7 +14,8 @@ function mk(over: Partial<Game>): Game {
   return {
     id: 0, name_ko: null, name_en: null, year: null, rank: null, rate: null,
     bgg_id: null, categories: [], mechanisms: [], weight: null,
-    players_min: null, players_max: null, time_min: null, age: null, review_count: null,
+    players_min: null, players_max: null, time_min: null, time_max: null, age: null,
+    review_count: null,
     ...over,
   };
 }

@@ -44,6 +44,57 @@ def _vote(soup, vtype):
     return None if v in (None, "", "-") else v
 
 
+# 플레이타임 표기: "50-140분"(범위) 또는 "45분"(단일). 데이터가 없으면 "-".
+TIME_RANGE = re.compile(r"(\d+)\s*-\s*(\d+)\s*분")
+TIME_ONE = re.compile(r"(\d+)\s*분")
+
+
+def _info_row(soup, label):
+    """상세 페이지 사양 블록(dl.game-info-item)에서 label('인원'/'시간'/'연령') 값.
+
+    **행이 없는 것과 값이 비어 있는 것을 구분해서 돌려준다** — 행이 없으면 None(파서를
+    못 믿는 상황이라 폴백이 필요), 값이 "-"면 ""(사이트가 "데이터 없음"이라고 명시한
+    것이므로 폴백하면 안 된다). 둘을 뭉뚱그리면 '9분의 1'처럼 시간 정보가 없는 게임이
+    description의 이름 부분("9분")으로 폴백해 버린다.
+    """
+    for dl in soup.select("dl.game-info-item"):
+        dt, dd = dl.select_one("dt"), dl.select_one("dd")
+        if dt and dd and dt.get_text(strip=True) == label:
+            v = dd.get_text(strip=True)
+            return "" if v == "-" else v
+    return None
+
+
+def parse_time(soup, desc=""):
+    """(time_min, time_max) — 둘 다 분.
+
+    **meta description이 아니라 사양 블록에서 읽는다.** description은
+    "{이름}(영문)은 ... A세 이상 B-C명이 D-E분 동안 ..." 템플릿이라 **게임 이름이 맨 앞에**
+    오는데, 이름에 숫자+분이 들어가면(8분 제국, 5분 던전, 가이스트블리츠 12시 5분전 …)
+    정규식이 이름 쪽에 먼저 걸린다. 실제로 '가이스트블리츠 12시 5분전'은 15분짜리인데
+    5분으로, '9분의 1'은 시간 정보가 없는데 9분으로 들어갔다.
+    사양 블록은 <dt>시간</dt> 라벨로 구분되므로 이 혼동이 원천적으로 없다.
+
+    desc는 **사양 블록 자체가 없는** 페이지를 위한 폴백이다(실측 150건 중 0건이지만
+    마크업이 또 바뀔 때를 대비). 블록이 있는데 값이 "-"면 폴백하지 않고 없는 값으로 둔다.
+    """
+    raw = _info_row(soup, "시간")
+    if raw is None:
+        raw = desc  # 행 자체가 없음 → 이름 오염을 감수하고라도 값이 없는 것보단 낫다
+    m = TIME_RANGE.search(raw) or TIME_ONE.search(raw)
+    if not m:
+        return None, None
+    t = m.groups()
+    lo = int(t[0])
+    hi = int(t[1]) if len(t) > 1 and t[1] else lo
+    # 보드라이프에 뒤집힌 범위가 실제로 올라와 있다("40-30분", "240-0분" 등 50건).
+    # 상한이 하한보다 작으면 그 범위는 못 믿으므로 **앞 숫자만** 단일값으로 쓴다.
+    # 뒤집어서 살리지 않는 이유: "90-12분"이 12~90분인지 90분 오타인지 알 수 없다.
+    if hi < lo:
+        hi = lo
+    return lo, hi
+
+
 def _ld_product(soup):
     """JSON-LD Product 블록(평점/평가수/이미지)."""
     for s in soup.find_all("script", attrs={"type": "application/ld+json"}):
@@ -107,7 +158,6 @@ def parse_detail(html):
     desc = meta.get("content", "") if meta else ""
     age = re.search(r"(\d+)\s*세\s*이상", desc)
     players = re.search(r"(\d+)\s*-\s*(\d+)\s*명", desc) or re.search(r"(\d+)\s*명", desc)
-    ptime = re.search(r"(\d+)\s*분", desc)
     weight = re.search(r"난이도\s*([\d.]+)", desc)
     rank = re.search(r"종합\s*([\d,]+)\s*위", desc)
     d["age"] = int(age.group(1)) if age else None
@@ -117,7 +167,10 @@ def parse_detail(html):
         d["players_max"] = int(g[1]) if len(g) > 1 and g[1] else int(g[0])
     else:
         d["players_min"] = d["players_max"] = None
-    d["time_min"] = int(ptime.group(1)) if ptime else None
+    # 시간만 사양 블록에서 읽는다 — 이유는 parse_time 주석 참고.
+    # (인원·연령은 사양 블록이 "2-0명"/"0명" 같은 미설정 값을 그대로 노출해서
+    #  오히려 description 쪽이 깨끗하다. 연령은 "세 이상" 앵커가 이름 오염을 막는다.)
+    d["time_min"], d["time_max"] = parse_time(soup, desc)
     d["weight"] = float(weight.group(1)) if weight else None
     d["overall_rank"] = int(rank.group(1).replace(",", "")) if rank else None
     return d

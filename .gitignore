@@ -19,6 +19,7 @@ data/games_detail.json
 data/games_detail_all.json
 data/dead_ids.json
 data/patched_ids.json
+data/patched_time_ids.json
 data/games_list.json
 # build_clean.py 산출 중간물. build_artifacts.py가 이걸 읽어 data/out을 만들고,
 # 최종본은 workers/api/src·apps/web/public으로 복사되므로 저장소에 둘 이유가 없다.

@@ -10,7 +10,7 @@ mechnames = json.load(open("mechanism_names.json", encoding="utf-8"))
 FULL = (
     "id", "name_ko", "name_en", "year", "rank", "rate", "bgg_id",
     "categories", "mechanisms",
-    "weight", "players_min", "players_max", "time_min", "age",
+    "weight", "players_min", "players_max", "time_min", "time_max", "age",
     "review_count", "best_players", "recommended_players",
     "types", "designers", "image",
 )
@@ -19,7 +19,7 @@ FULL = (
 SLIM = (
     "id", "name_ko", "name_en", "year", "rank", "rate", "bgg_id",
     "categories", "mechanisms", "types",
-    "weight", "players_min", "players_max", "time_min", "age",
+    "weight", "players_min", "players_max", "time_min", "time_max", "age",
 )
 
 full = [{k: g[k] for k in FULL} for g in clean]

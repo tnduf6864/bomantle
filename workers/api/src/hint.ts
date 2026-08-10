@@ -59,6 +59,13 @@ function text(level: number, label: string, value: string): HintData {
   return { level, label, value: value || "정보 없음", kind: "text" };
 }
 
+/** " · 50-140분" 형태의 플레이타임 조각. 시간 정보가 없으면 빈 문자열. */
+function playtimeSuffix(g: FullGame): string {
+  if (!g.time_min) return "";
+  const range = g.time_max && g.time_max !== g.time_min ? `-${g.time_max}` : "";
+  return ` · ${g.time_min}${range}분`;
+}
+
 /**
  * 단계별 힌트(8단계). 정답 이름은 7·8단계의 글자수·초성 외에는 노출하지 않음.
  * 박스아트는 정답 공개 시에만 보여주므로 힌트에서 제외.
@@ -78,8 +85,7 @@ export function buildHint(
         g.players_min === g.players_max
           ? `${g.players_min}명`
           : `${g.players_min}-${g.players_max}명`;
-      const time = g.time_min ? ` · ${g.time_min}분` : "";
-      return text(1, "인원 · 플레이타임", `${players}${time}`);
+      return text(1, "인원 · 플레이타임", `${players}${playtimeSuffix(g)}`);
     }
     case 2: {
       const type = g.types?.[0] ?? "";
