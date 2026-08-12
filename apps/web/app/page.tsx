@@ -275,6 +275,22 @@ export default function Page() {
     setStats(loadStats());
   }, []);
 
+  // 통계 모달: ESC로 닫기 + 열려 있는 동안 뒤 페이지 스크롤 잠금.
+  // 모바일에서 배경이 같이 스크롤되면 모달이 화면 밖으로 밀려 닫기가 어려워진다.
+  useEffect(() => {
+    if (!showStats) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowStats(false);
+    };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [showStats]);
+
   // 게임 완료(정답/포기) 시 누적 통계 집계. 같은 날짜는 recordResult가 1회만 반영.
   useEffect(() => {
     if (!won || !today) return;
