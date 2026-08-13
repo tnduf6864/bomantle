@@ -45,9 +45,10 @@ import {
 } from "../lib/stats";
 import { deviceId } from "../lib/device";
 import { FEEDBACK_URL } from "../lib/constants";
-import { RESET_HOUR, clientPuzzleDate, msUntilNextReset, formatCountdown } from "../lib/reset";
+import { clientPuzzleDate } from "../lib/reset";
 import { useKeyboardInsets, useScrollInputIntoView } from "../lib/keyboard";
 import { AnswerCard } from "../components/AnswerCard";
+import { ResetCountdown } from "../components/ResetCountdown";
 import { TodayStatsCard } from "../components/TodayStatsCard";
 import { PercentileCard, TodaySummaryCard } from "../components/PercentileCard";
 import { DistBars } from "../components/DistBars";
@@ -140,7 +141,6 @@ export default function Page() {
   const [shareMsg, setShareMsg] = useState("");
   const [hints, setHints] = useState<HintData[]>([]);
   const [hintLoading, setHintLoading] = useState(false);
-  const [countdown, setCountdown] = useState("");
   const [visitors, setVisitors] = useState<number | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [showStats, setShowStats] = useState(false);
@@ -160,6 +160,8 @@ export default function Page() {
   const seqRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestRef = useRef<HTMLDivElement>(null);
+  // 한글 IME 조합이 진행 중인지. 조합 중에는 입력창을 비우는 방법이 달라진다(clearInput).
+  const composingRef = useRef(false);
   // 응답 대기 중인 gameId. 같은 게임 연속 제출(race) 중복 추가 방지.
   const inFlightRef = useRef<Set<number>>(new Set());
   // 하루 경계 재조회 진행 중 플래그(중복 fetch 방지).
@@ -362,14 +364,6 @@ export default function Page() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [refreshPct, refreshTodayStats]);
 
-  // 다음 초기화까지 1초마다 카운트다운 갱신
-  useEffect(() => {
-    const tick = () => setCountdown(formatCountdown(msUntilNextReset()));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-
   // 하루 경계(오전 9시) 자동 전환: 탭을 열어둔 채 날짜가 넘어가면 서버에서 새 판을
   // 받아 자동 리셋. 클라 시계로 후보를 감지하되, 서버 date가 실제로 바뀐 경우에만 적용.
   useEffect(() => {
@@ -464,12 +458,39 @@ export default function Page() {
   // 방금(가장 최근) 추측한 행 — 최상단 고정용
   const lastRow = rows.length ? rows[rows.length - 1] : null;
 
+  /**
+   * 입력창을 즉시·확실하게 비운다.
+   *
+   * `setQuery("")`만으로는 부족하다. 한글 IME는 조합 중인 글자를 브라우저 쪽 버퍼에
+   * 들고 있어서, React가 value를 ""로 바꿔도 조합이 끝날 때 그 글자를 도로 써넣는다.
+   * 그래서 "제출했는데 직전에 친 값이 그대로 남고, 이어서 치면 그 뒤에 붙는" 증상이 난다.
+   * (모바일에서 자동완성을 탭할 때 특히 잘 난다 — 포커스를 유지하느라 조합이 안 끝난다.)
+   *
+   * 조합 중이면 blur로 조합 세션을 강제 종료한 뒤 곧바로 포커스를 되돌린다. 사용자
+   * 제스처(Enter·탭) 안에서 같은 태스크에 일어나므로 모바일 키보드는 내려가지 않는다.
+   * DOM value도 직접 비워 리렌더를 기다리는 사이에 옛 값이 보이지 않게 한다.
+   */
+  const clearInput = useCallback(() => {
+    const el = inputRef.current;
+    // 포커스가 없으면 조합은 이미 끝난 것 — 괜히 포커스를 뺏어오지 않는다.
+    if (el && composingRef.current && document.activeElement === el) {
+      el.blur();
+      el.focus();
+    }
+    composingRef.current = false;
+    if (el) el.value = "";
+    setQuery("");
+    setActiveIdx(0);
+  }, []);
+
   // 선택된 게임을 id 기준으로 추측. 동명 다른 게임도 각각 구분되어 추가됨.
   async function submitGame(game: GameMeta) {
     setError("");
+    // 응답을 기다리기 **전에** 비운다. 네트워크 왕복 뒤에 비우면 그동안 입력창에 옛 값이
+    // 남아 있고, 사용자가 그새 다음 게임을 치기 시작했으면 그걸 지워버린다.
+    clearInput();
     // 이미 추측했거나 응답 대기 중이면 중복 추가 방지 (id 기준)
     if (rows.some((r) => r.id === game.id) || inFlightRef.current.has(game.id)) {
-      setQuery("");
       setError(`이미 추측한 게임이에요: ${game.name_ko}`);
       return;
     }
@@ -479,14 +500,14 @@ export default function Page() {
       const row: GuessRow = { ...res, game, seq: ++seqRef.current };
       // 방어적 dedup: 동시 제출이 끼어들어도 같은 id 중복 추가 안 함
       setRows((prev) => (prev.some((r) => r.id === row.id) ? prev : [...prev, row]));
-      setQuery("");
       if (res.win) {
         setWon(true);
         setAnswer(res.answer?.name_ko ?? game.name_ko);
         if (res.answer) setAnswerInfo(res.answer);
       }
     } catch {
-      setError("서버 오류예요. 잠시 후 다시 시도해주세요.");
+      // 입력창은 이미 비워졌으니 어떤 게임이 실패했는지 알려준다.
+      setError(`'${game.name_ko}' 제출에 실패했어요. 잠시 후 다시 시도해주세요.`);
     } finally {
       inFlightRef.current.delete(game.id);
     }
@@ -616,12 +637,7 @@ export default function Page() {
         {visitors != null && visitors > 0 && (
           <div className="visitors">👥 오늘 {visitors.toLocaleString()}명 접속</div>
         )}
-        {countdown && (
-          <div className="reset-info">
-            ⏰ 다음 문제까지 <b>{countdown}</b>
-            <span className="reset-note">매일 오전 9시 초기화</span>
-          </div>
-        )}
+        <ResetCountdown />
       </header>
 
       {won && (
@@ -757,9 +773,22 @@ export default function Page() {
                 setQuery(e.target.value);
                 setActiveIdx(0);
               }}
+              onCompositionStart={() => {
+                composingRef.current = true;
+              }}
+              onCompositionEnd={(e) => {
+                composingRef.current = false;
+                // 조합이 끝나며 확정된 글자를 다시 맞춘다. change 이벤트를 조합 뒤에
+                // 안 주는 IME(일부 안드로이드 키보드)에서 상태가 뒤처지는 걸 막는다.
+                setQuery(e.currentTarget.value);
+              }}
               onKeyDown={onKeyDown}
               onFocus={scrollInputIntoView}
               autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              enterKeyHint="send"
             />
             <button disabled={loading || !query} onClick={submitCurrent}>
               추측
