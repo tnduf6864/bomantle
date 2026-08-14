@@ -52,6 +52,11 @@ export interface GuessResult {
   rank: number;
   win: boolean;
   answer?: AnswerInfo;
+  /**
+   * 정답과 같은 시리즈의 **다른** 게임(예: 정답이 "브라스: 랭커셔"인데 "브라스: 버밍엄"을
+   * 추측). 시리즈는 맞혔으니 편만 바꿔 보라는 신호. 서버가 판정해 내려준다.
+   */
+  sameSeries?: boolean;
 }
 
 export interface TodayInfo {

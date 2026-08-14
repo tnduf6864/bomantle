@@ -12,6 +12,7 @@ import boxartIds from "./boxart.json";
 import {
   kstDate,
   puzzleNumber,
+  baseName,
   buildAnswerPool,
   dailyAnswerFromSeed,
 } from "./answer.ts";
@@ -32,6 +33,9 @@ const mechanisms = mechData as Record<string, string>;
 // 콜드 스타트 1회: 인덱스 + 정답 풀 구성 (isolate 동안 재사용)
 const index = buildIndex(games);
 const pool = buildAnswerPool(games);
+// id -> 게임. games.find()를 요청마다 돌리면 15,000개를 훑는다(정답 공개·힌트·추측 판정
+// 모두 이 조회가 필요하다). 콜드 스타트에 한 번만 만든다.
+const gameById = new Map(games.map((g) => [g.id, g]));
 // 재호스팅된 박스아트가 있는 게임 id (빌드 시 data 스크립트가 생성).
 const boxartSet = new Set<number>(boxartIds as number[]);
 
@@ -133,8 +137,26 @@ function imageUrl(game: { id: number }): string | null {
 
 /** 정답 공개용 게임 정보(맞힘·포기 공용). 정답 확정 후에만 호출할 것. */
 function revealAnswer(answerId: number) {
-  const ans = games.find((g) => g.id === answerId)!;
+  const ans = gameById.get(answerId)!;
   return buildAnswerInfo(ans, categories, mechanisms, imageUrl(ans));
+}
+
+/**
+ * 추측이 정답과 **같은 시리즈**인가(같은 게임은 제외 — 그건 win이다).
+ *
+ * 한 프랜차이즈에 단독 플레이 가능한 형제가 여럿인 경우가 많다(브라스: 버밍엄/랭커셔,
+ * 도미니언/장막뒤의 사람들 …). 이때 시리즈를 정확히 떠올린 사람이 형제를 찍으면
+ * 점수·순위는 최상위인데 정답은 아니어서, 사실상 맞혔는데 왜 아닌지 모른 채 끝난다.
+ * 이 신호로 "이 시리즈는 맞다, 편만 다르다"를 알려 준다.
+ *
+ * 노출 위험은 낮다 — 같은 시리즈를 이미 찍었다는 건 유사도 점수로도 드러나 있고,
+ * 시리즈를 특정하려면 추측을 그만큼 써야 한다.
+ */
+function isSameSeries(guessId: number, answerId: number): boolean {
+  if (guessId === answerId) return false;
+  const a = gameById.get(guessId);
+  const b = gameById.get(answerId);
+  return !!a && !!b && baseName(a) === baseName(b);
 }
 
 export default {
@@ -187,6 +209,9 @@ export default {
       // win일 때만 정답 정보(이름·박스아트·사양) 동봉
       if (result.win) {
         return json({ ...result, answer: revealAnswer(day.answerId) }, req);
+      }
+      if (isSameSeries(gameId, day.answerId)) {
+        return json({ ...result, sameSeries: true }, req);
       }
       return json(result, req);
     }
@@ -260,7 +285,7 @@ export default {
         return json({ error: "bad level" }, req, 400);
       }
       const day = await getDayState(env, date);
-      const ans = games.find((g) => g.id === day.answerId)!;
+      const ans = gameById.get(day.answerId)!;
       return json(buildHint(level, ans, index, categories, mechanisms), req);
     }
 

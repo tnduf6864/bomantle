@@ -119,6 +119,19 @@ function hintDistRows(info: PercentileResult) {
   }));
 }
 
+/**
+ * 자동완성 후보의 출시연도(표시용). 원본에서 "0"은 미상을 뜻하므로 감춘다.
+ *
+ * 연도를 띄우는 이유: 한글명이 같은 게임이 218그룹이나 된다. 같은 게임의 다른 판인
+ * 경우도 있고("버건디의 성" 2011/2019), 아예 다른 게임인 경우도 있다("루트" =
+ * Root/Loot, "마라케시" = Marrakesh/Marrakech). 그중 23그룹은 영문명까지 같아서
+ * 예전 표기(한글명 + 영문명)로는 **화면상 완전히 똑같은 두 줄**이 떴다. 어느 쪽을
+ * 고르든 절반은 엉뚱한 레코드라, 정답 이름을 정확히 알고도 추측 1회를 날렸다.
+ */
+function suggestYear(g: GameMeta): string {
+  return g.year && g.year !== "0" ? g.year : "";
+}
+
 function metaText(db: GameDB, g: GameMeta): string {
   const parts: string[] = [];
   const cats = categoryNames(db, g).slice(0, 3);
@@ -603,6 +616,8 @@ export default function Page() {
       <div className="seq">{row.seq}</div>
       <div className="name">
         {row.game.name_ko}
+        {/* 시리즈는 맞고 편만 다른 경우 — 점수만 보면 왜 정답이 아닌지 알 수 없다. */}
+        {row.sameSeries && !row.win && <span className="badge series">같은 시리즈</span>}
         {opts.badge && <span className="badge">가장 가까움</span>}
         <span className="meta">{metaText(db!, row.game)}</span>
       </div>
@@ -805,8 +820,11 @@ export default function Page() {
                       submitGame(s);
                     }}
                   >
-                    <span>{s.name_ko}</span>
-                    <span className="en">{s.name_en}</span>
+                    <span className="ko">{s.name_ko}</span>
+                    <span className="en">
+                      {s.name_en && <span className="en-name">{s.name_en}</span>}
+                      {suggestYear(s) && <span className="yr">{suggestYear(s)}</span>}
+                    </span>
                   </div>
                 ))}
               </div>

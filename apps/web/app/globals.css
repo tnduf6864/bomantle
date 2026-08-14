@@ -151,8 +151,33 @@ header.top .visitors {
   background: rgba(91, 140, 255, 0.18);
   border-left-color: var(--accent);
 }
-.suggest .item.active span:first-child { color: var(--text); font-weight: 600; }
-.suggest .item .en { color: var(--muted); font-size: 12px; }
+/* `.item > span` 두 개를 각각 겨냥한다. 예전엔 `span:first-child`였는데, 우측 표기가
+   중첩 span으로 바뀌면서 그 안쪽 첫 span까지 같이 강조되던 자리다. */
+.suggest .item.active .ko { color: var(--text); font-weight: 600; }
+.suggest .item .ko {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 우측 보조 표기(영문명 · 연도). 폭이 모자라면 영문명부터 줄어들게 shrink를 크게 준다 —
+   연도는 동명 게임을 가르는 유일한 단서라 잘리면 안 된다. */
+.suggest .item .en {
+  flex: 0 8 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.suggest .item .en-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggest .item .yr { flex: none; opacity: 0.8; }
 
 .hint { color: var(--muted); font-size: 12px; margin: 4px 2px 16px; }
 
@@ -789,6 +814,13 @@ header.top .visitors {
   padding: 1px 7px;
   margin-left: 6px;
   vertical-align: middle;
+}
+/* "같은 시리즈"는 순위 강조(주황)와 성격이 다르다 — 다음 추측을 어디로 좁힐지
+   알려주는 신호라 색을 갈라 둔다. 한 줄에 둘이 같이 뜰 수 있다. */
+.row .name .badge.series {
+  color: var(--accent);
+  background: rgba(91, 140, 255, 0.12);
+  border-color: var(--accent);
 }
 .row .seq { color: var(--muted); font-size: 12px; text-align: right; }
 .row .name { font-weight: 600; }

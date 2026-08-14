@@ -38,8 +38,42 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-/** 프랜차이즈 기준 이름(콜론/대시 앞부분). 확장·리메이크 묶음용. */
-function baseName(g: Game): string {
+/** 시드 하나로 같은 난수열을 재현하는 32비트 PRNG(mulberry32). 순열 생성 전용. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 시드 기반 Fisher-Yates 셔플. 입력 배열은 건드리지 않는다. */
+function shuffled<T>(items: T[], seed: number): T[] {
+  const out = items.slice();
+  const rnd = mulberry32(seed);
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/** 음수도 안전한 나머지(퍼즐 번호가 EPOCH 이전이면 음수가 된다). */
+function mod(a: number, m: number): number {
+  return ((a % m) + m) % m;
+}
+
+/**
+ * 프랜차이즈 기준 이름(콜론/대시 앞부분).
+ *
+ * 두 곳에서 쓴다: 정답 풀의 프랜차이즈 묶음(아래)과, 추측이 정답과 같은 시리즈인지
+ * 판정하는 `/api/guess`. 두 판정이 갈리면 "같은 시리즈"라고 알려준 게임이 정답 풀에는
+ * 형제로 안 잡히는 모순이 생기므로 규칙을 한 곳에 둔다.
+ */
+export function baseName(g: Game): string {
   const n = g.name_ko ?? g.name_en ?? String(g.id);
   return n.split(/[:\-(]/)[0].trim();
 }
@@ -86,7 +120,24 @@ export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): n
     .map((g) => g.id);
 }
 
-/** 날짜 시드로 풀에서 정답 id 선택(KV 오버라이드 없을 때). */
+/**
+ * 날짜로 풀에서 정답 id 선택(KV 오버라이드 없을 때).
+ *
+ * 날짜를 직접 해시해 뽑으면(예전 방식) 매일 **독립 추첨**이라 이미 나온 정답이 금방
+ * 다시 걸린다 — 실측으로 365일 중 82일이 재출현했고 최단 간격은 5일이었다. 풀이
+ * 565개나 되는데 1년에 283개밖에 못 쓰는 셈이라, 매일 하는 사람은 한 주 안에 같은
+ * 답을 두 번 본다.
+ *
+ * 그래서 추첨이 아니라 **순열을 소진**한다. 풀 전체를 사이클마다 한 번 섞어 두고
+ * 퍼즐 번호 순서대로 하나씩 꺼내므로, 한 사이클(= 풀 크기, 현재 565일) 안에서는
+ * 중복이 구조적으로 불가능하다. 사이클이 넘어가면 새 시드로 다시 섞여 순서가 바뀐다.
+ *
+ * 서버 상태는 여전히 없다 — 날짜만 있으면 같은 답이 재현된다.
+ */
 export function dailyAnswerFromSeed(date: string, pool: number[]): number {
-  return pool[hash(date) % pool.length];
+  if (pool.length === 0) throw new Error("answer pool is empty");
+  // 퍼즐 1번이 순열의 0번째가 되도록 0-base로 맞춘다.
+  const n = pool.length;
+  const i = puzzleNumber(date) - 1;
+  return shuffled(pool, hash(`cycle:${Math.floor(i / n)}`))[mod(i, n)];
 }
