@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildIndex } from "@bomantle/core";
-import { buildHint, HINT_LABELS, type FullGame } from "./hint.ts";
+import { buildHint, HINT_LABELS, sharedTags, tagTotals, type FullGame } from "./hint.ts";
 
 // 합성 게임 2개. cat20/mech200을 두 게임이 공유 → df가 커져 idf 최소(=가장 흔함).
 // cat10/mech100은 카탄에만 있어 idf 최대(=가장 드묾).
@@ -90,4 +90,21 @@ test("라벨은 8단계이고 buildHint 라벨과 일치", () => {
 });
 test("범위 밖 레벨은 빈 힌트", () => {
   assert.equal(v(9), "정보 없음");
+});
+
+test("sharedTags: 추측과 정답이 공유하는 테마·메커니즘만", () => {
+  // 카탄(10,20 / 100,200) vs 윙스팬(20,30 / 200,300) → 경제(20)·교역(200)
+  assert.deepEqual(sharedTags(games[1], g), { cats: [20], mechs: [200] });
+  assert.deepEqual(sharedTags({ ...games[1], categories: [30], mechanisms: [] }, g), { cats: [], mechs: [] });
+});
+test("tagTotals: 정답 태그 총개수(중복 제거)", () => {
+  assert.deepEqual(tagTotals(g), { cats: 2, mechs: 2 });
+  assert.deepEqual(tagTotals({ ...g, mechanisms: undefined }), { cats: 2, mechs: 0 });
+});
+test("힌트 4·5·7단계는 공개한 태그 id를 함께 준다", () => {
+  assert.deepEqual(buildHint(4, g, idx, cats, mechs).tags, { cats: [20], mechs: [] });
+  assert.deepEqual(buildHint(5, g, idx, cats, mechs).tags, { cats: [], mechs: [200] });
+  const t7 = buildHint(7, g, idx, cats, mechs).tags!;
+  assert.equal(t7.cats.length + t7.mechs.length, 1);
+  assert.equal(buildHint(1, g, idx, cats, mechs).tags, undefined);
 });

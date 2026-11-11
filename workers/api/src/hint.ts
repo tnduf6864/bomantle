@@ -9,11 +9,41 @@ export interface FullGame extends Game {
   recommended_players?: string | null;
 }
 
+/** 태그 id 묶음(테마=categories, 메커니즘=mechanisms). */
+export interface TagSet {
+  cats: number[];
+  mechs: number[];
+}
+
 export interface HintData {
   level: number;
   label: string;
   value: string;
   kind: "text" | "image";
+  /** 이 힌트로 공개된 정답 태그 — 클라의 "찾은 정답 태그" 목록에 합쳐진다 */
+  tags?: TagSet;
+}
+
+/**
+ * 추측과 정답이 **공유하는 태그**. 클라가 "테마 1/3 · 카드 게임"처럼 찾은 정답 태그를
+ * 모아 보여 주는 데 쓴다. 같은 태그를 가진 게임을 맞히면 그 태그가 공개되는 셈이라,
+ * 막대(0~100)만으로는 알 수 없던 "무엇이 겹쳤는지"를 알려 준다.
+ */
+export function sharedTags(guess: Game, answer: Game): TagSet {
+  const ac = new Set(answer.categories);
+  const am = new Set(answer.mechanisms ?? []);
+  return {
+    cats: [...new Set(guess.categories)].filter((c) => ac.has(c)),
+    mechs: [...new Set(guess.mechanisms ?? [])].filter((m) => am.has(m)),
+  };
+}
+
+/** 정답의 태그 총개수(테마·메커니즘) — "1/3"의 분모. */
+export function tagTotals(answer: Game): { cats: number; mechs: number } {
+  return {
+    cats: new Set(answer.categories).size,
+    mechs: new Set(answer.mechanisms ?? []).size,
+  };
 }
 
 /**
@@ -101,7 +131,7 @@ function rarestTag(
   index: GameIndex,
   cats: Record<string, string>,
   mechs: Record<string, string>,
-): string {
+): { text: string; tags: TagSet } | null {
   const shown = new Set<string>();
   const cId = themeTagId(g, index, cats);
   const type = g.types?.[0];
@@ -109,19 +139,19 @@ function rarestTag(
   if (cId != null) shown.add(`c${cId}`);
   if (mId != null) shown.add(`m${mId}`);
 
-  let best = "";
+  let best: { text: string; tags: TagSet } | null = null;
   let bestIdf = -Infinity;
-  const consider = (key: string, name: string | undefined, idf: number | undefined, kind: string) => {
+  const consider = (key: string, name: string | undefined, idf: number | undefined, tags: TagSet, kind: string) => {
     if (!name || shown.has(key) || idf == null || idf <= bestIdf) return;
     bestIdf = idf;
-    best = `${name} (${kind})`;
+    best = { text: `${name} (${kind})`, tags };
   };
   for (const c of g.categories) {
     if (cats[String(c)] === type) continue; // 3단계 유형으로 이미 나온 이름
-    consider(`c${c}`, cats[String(c)], index.idf.get(c), "테마");
+    consider(`c${c}`, cats[String(c)], index.idf.get(c), { cats: [c], mechs: [] }, "테마");
   }
   for (const m of g.mechanisms ?? []) {
-    consider(`m${m}`, mechs[String(m)], index.midf.get(m), "메커니즘");
+    consider(`m${m}`, mechs[String(m)], index.midf.get(m), { cats: [], mechs: [m] }, "메커니즘");
   }
   return best;
 }
@@ -163,13 +193,15 @@ export function buildHint(
       return text(3, label, [g.types?.[0] ?? "", decade(g.year)].filter(Boolean).join(" · "));
     case 4: {
       const catId = themeTagId(g, index, cats);
-      return text(4, label, catId != null ? (cats[String(catId)] ?? "") : "");
+      const h = text(4, label, catId != null ? (cats[String(catId)] ?? "") : "");
+      return catId != null ? { ...h, tags: { cats: [catId], mechs: [] } } : h;
     }
     case 5: {
       const mId = commonest(g.mechanisms ?? [], index.midf);
       const mech = mId != null ? (mechs[String(mId)] ?? "") : "";
       const best = g.best_players ? `베스트 ${g.best_players}인` : "";
-      return text(5, label, [mech, best].filter(Boolean).join(" · "));
+      const h = text(5, label, [mech, best].filter(Boolean).join(" · "));
+      return mId != null ? { ...h, tags: { cats: [], mechs: [mId] } } : h;
     }
     case 6: {
       const rate = g.rate != null ? `평점 ${g.rate.toFixed(1)}` : "";
@@ -179,7 +211,7 @@ export function buildHint(
       // 태그가 적어 더 보여줄 게 없으면(예: 루미큐브 — 태그 3개) 한 칸을 버리지 않고
       // 추천 인원·연령으로 대신한다.
       const tag = rarestTag(g, index, cats, mechs);
-      if (tag) return text(7, label, tag);
+      if (tag) return { ...text(7, label, tag.text), tags: tag.tags };
       const rec = g.recommended_players ? `추천 ${g.recommended_players}인` : "";
       const age = g.age ? `${g.age}세 이상` : "";
       return text(7, "추천 인원 · 연령", [rec, age].filter(Boolean).join(" · "));

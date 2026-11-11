@@ -20,7 +20,7 @@ import {
   resolvePuzzleDate,
   type AnswerSchedule,
 } from "./answer.ts";
-import { buildHint, HINT_LABELS, type FullGame } from "./hint.ts";
+import { buildHint, HINT_LABELS, sharedTags, tagTotals, type FullGame } from "./hint.ts";
 import { buildAnswerInfo } from "./reveal.ts";
 import { parsePage, sliceRanking } from "./ranklist.ts";
 import { sanitizeSubmission } from "./rank.ts";
@@ -241,6 +241,9 @@ export default {
           date: puzzleDate,
           // 테마·진행방식·수치 각 축의 유사도 — 어느 방향으로 좁힐지 추리하는 단서.
           parts: similarityParts(index, day.answerId, gameId),
+          // 정답과 겹친 태그 + 정답 태그 총개수 → 클라의 "찾은 정답 태그 1/3" 목록
+          match: sharedTags(gameById.get(gameId)!, gameById.get(day.answerId)!),
+          tagTotal: tagTotals(gameById.get(day.answerId)!),
           ...(isSameSeries(gameId, day.answerId) ? { sameSeries: true } : {}),
         },
         req,

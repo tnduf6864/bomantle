@@ -51,6 +51,7 @@ import {
   buildShareText,
   guessesUntilHint,
   DEFAULT_HINT_LABELS,
+  foundTags,
   MAX_HINT_LEVEL,
   parseArchiveDate,
   puzzleNumberOf,
@@ -60,6 +61,7 @@ import { Modal } from "../components/Modal";
 import { HelpModal } from "../components/HelpModal";
 import { ArchiveModal } from "../components/ArchiveModal";
 import { GuessParts } from "../components/GuessParts";
+import { FoundTagsPanel } from "../components/FoundTagsPanel";
 import { AnswerCard } from "../components/AnswerCard";
 import { ResetCountdown } from "../components/ResetCountdown";
 import { TodayStatsCard } from "../components/TodayStatsCard";
@@ -553,6 +555,8 @@ export default function Page() {
 
   // 다음 힌트까지 남은 추측 수(0이면 지금 열 수 있음).
   const hintWait = guessesUntilHint(hints.length + 1, rows.length);
+  // 추측·힌트로 찾아낸 정답 태그(상단 목록용).
+  const found = useMemo(() => foundTags(rows, hints), [rows, hints]);
   const nextHintLabel =
     (today?.hintLabels ?? DEFAULT_HINT_LABELS)[hints.length] ?? `${hints.length + 1}단계`;
 
@@ -888,6 +892,8 @@ export default function Page() {
               `순위는 전체 ${(today.totalGames - 1).toLocaleString()}개 게임 중 정답과 가까운 순서예요 · `}
             {rows.length}번 추측함
           </div>
+
+          {db && <FoundTagsPanel db={db} found={found} />}
 
           {(hints.length > 0 || !loading) && (
             <div className="hints">

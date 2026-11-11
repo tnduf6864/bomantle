@@ -1,7 +1,7 @@
 // 게임 진행 규칙 중 화면과 무관한 순수 로직 — 지난 문제 날짜, 힌트 해금, 공유 텍스트.
 // page.tsx에서 분리해 `node --test`로 검증한다.
 
-import type { GuessRow, PercentileResult } from "./types";
+import type { GuessRow, HintData, PercentileResult } from "./types";
 
 /** 퍼즐 1번 날짜. 워커 answer.ts EPOCH와 같아야 한다. */
 export const EPOCH = "2026-01-01";
@@ -84,6 +84,39 @@ export function hintUnlockAt(level: number): number {
 /** 다음 힌트(level)를 열려면 추측이 몇 번 더 필요한가. 0이면 지금 열 수 있다. */
 export function guessesUntilHint(level: number, guesses: number): number {
   return Math.max(0, hintUnlockAt(level) - guesses);
+}
+
+// ── 찾은 정답 태그 ─────────────────────────────────────────────────────
+
+export interface FoundTags {
+  /** 찾은 태그 id — 처음 찾은 순서 */
+  cats: number[];
+  mechs: number[];
+  /** 정답 태그 총개수. 아직 새 형식 응답을 받은 적이 없으면 null(목록을 감춘다) */
+  total: { cats: number; mechs: number } | null;
+}
+
+/**
+ * 추측들과 힌트로 알아낸 정답 태그를 합친다. 같은 태그를 가진 게임을 추측하면 그 태그가,
+ * 4·5·7단계 힌트를 열면 그 힌트의 태그가 공개된다.
+ */
+export function foundTags(
+  rows: Pick<GuessRow, "match" | "tagTotal">[],
+  hints: Pick<HintData, "tags">[],
+): FoundTags {
+  const cats: number[] = [];
+  const mechs: number[] = [];
+  let total: FoundTags["total"] = null;
+  const add = (t?: { cats: number[]; mechs: number[] }) => {
+    for (const c of t?.cats ?? []) if (!cats.includes(c)) cats.push(c);
+    for (const m of t?.mechs ?? []) if (!mechs.includes(m)) mechs.push(m);
+  };
+  for (const r of rows) {
+    add(r.match);
+    if (r.tagTotal) total = r.tagTotal;
+  }
+  for (const h of hints) add(h.tags);
+  return { cats, mechs, total };
 }
 
 // ── 공유 ─────────────────────────────────────────────────────────────

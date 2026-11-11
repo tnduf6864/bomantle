@@ -57,6 +57,10 @@ export interface GuessResult {
    * 추측). 시리즈는 맞혔으니 편만 바꿔 보라는 신호. 서버가 판정해 내려준다.
    */
   sameSeries?: boolean;
+  /** 정답과 겹친 태그(오답일 때). 구버전 응답·저장분에는 없다 */
+  match?: TagSet;
+  /** 정답의 태그 총개수 — "찾은 정답 태그 1/3"의 분모 */
+  tagTotal?: { cats: number; mechs: number };
   /**
    * 유사도 세 축(각 0~100, 가중치 적용 전). 오답일 때만 온다 — 정답이면 셋 다 100이라 의미 없음.
    * 구버전 서버·저장분에는 없다.
@@ -141,6 +145,14 @@ export interface HintData {
   label: string;
   value: string;
   kind: "text" | "image";
+  /** 이 힌트로 공개된 정답 태그(4·5·7단계). 찾은 정답 태그 목록에 합쳐진다 */
+  tags?: TagSet;
+}
+
+/** 태그 id 묶음 — 테마(categories)·메커니즘(mechanisms). */
+export interface TagSet {
+  cats: number[];
+  mechs: number[];
 }
 
 /** 추측 1건의 화면 표시용 레코드 */

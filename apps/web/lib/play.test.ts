@@ -10,6 +10,7 @@ const {
   guessesUntilHint,
   shareGrid,
   buildShareText,
+  foundTags,
 } = await import("./play.ts");
 
 type Row = Parameters<typeof buildShareText>[0]["rows"][number];
@@ -87,4 +88,18 @@ test("buildShareText: 지난 문제는 표시·딥링크가 붙고 연속 기록
 test("buildShareText: 포기는 최고 순위를 보여준다", () => {
   const t = buildShareText({ rows: [row(1500), row(42)], hintCount: 0, puzzleNumber: 1 });
   assert.match(t, /포기 — 최고 42위/);
+});
+
+test("foundTags: 추측·힌트로 찾은 정답 태그를 중복 없이 합친다", () => {
+  const rows = [
+    { match: { cats: [5], mechs: [] }, tagTotal: { cats: 3, mechs: 2 } },
+    { match: { cats: [5, 7], mechs: [40] }, tagTotal: { cats: 3, mechs: 2 } },
+    {}, // 구버전 저장분
+  ];
+  const r = foundTags(rows, [{ tags: { cats: [9], mechs: [40] } }, {}]);
+  assert.deepEqual(r, { cats: [5, 7, 9], mechs: [40], total: { cats: 3, mechs: 2 } });
+});
+
+test("foundTags: 새 형식 응답이 없으면 total은 null", () => {
+  assert.equal(foundTags([{}], []).total, null);
 });
