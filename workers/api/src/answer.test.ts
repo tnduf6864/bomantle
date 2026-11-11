@@ -9,6 +9,10 @@ import {
   POOL_MAX_RANK,
   puzzleNumber,
   RESET_HOUR,
+  addDays,
+  answerForDate,
+  resolvePuzzleDate,
+  type AnswerSchedule,
 } from "./answer.ts";
 
 function mk(over: Partial<Game>): Game {
@@ -122,10 +126,30 @@ test("buildAnswerPool: 순위가 POOL_MAX_RANK 밖이면 제외 (전수 크롤 �
   assert.deepEqual(buildAnswerPool(games), [1]);
 });
 
-test("buildAnswerPool: 같은 프랜차이즈는 최상위 1개만 (아줄 > 아줄:신트라)", () => {
+test("buildAnswerPool: 같은 BGG 게임(판·에디션)은 최상위 1개만", () => {
+  const base = { weight: 2, categories: [1, 2], players_min: 2, review_count: 100 };
   const games: Game[] = [
-    mk({ id: 1, name_ko: "아줄: 신트라의 스테인드글라스", rank: 50, weight: 2, categories: [1, 2], players_min: 2, review_count: 100 }),
-    mk({ id: 2, name_ko: "아줄", rank: 20, weight: 2, categories: [1, 2], players_min: 2, review_count: 100 }),
+    mk({ id: 1, name_ko: "버건디의 성 (2019)", rank: 50, bgg_id: 84876, ...base }),
+    mk({ id: 2, name_ko: "버건디의 성", rank: 20, bgg_id: 84876, ...base }),
+  ];
+  assert.deepEqual(buildAnswerPool(games), [2]);
+});
+
+test("buildAnswerPool: 시리즈 형제라도 BGG 게임이 다르면 둘 다 정답 후보 (브라스)", () => {
+  // 예전 baseName 묶음은 랭커셔를 영구 제외했다.
+  const base = { weight: 4, categories: [1, 2], players_min: 2, review_count: 100 };
+  const games: Game[] = [
+    mk({ id: 1, name_ko: "브라스: 버밍엄", rank: 1, bgg_id: 224517, ...base }),
+    mk({ id: 2, name_ko: "브라스: 랭커셔", rank: 14, bgg_id: 28720, ...base }),
+  ];
+  assert.deepEqual(buildAnswerPool(games), [1, 2]);
+});
+
+test("buildAnswerPool: bgg_id가 없으면 이름(baseName)으로 묶는다", () => {
+  const base = { weight: 2, categories: [1, 2], players_min: 2, review_count: 100 };
+  const games: Game[] = [
+    mk({ id: 1, name_ko: "아줄: 신트라의 스테인드글라스", rank: 50, ...base }),
+    mk({ id: 2, name_ko: "아줄", rank: 20, ...base }),
   ];
   assert.deepEqual(buildAnswerPool(games), [2]);
 });
@@ -136,4 +160,58 @@ test("buildAnswerPool: 랭킹 오름차순 정렬 + limit 적용", () => {
   );
   assert.deepEqual(buildAnswerPool(games), [1, 2, 3]);
   assert.deepEqual(buildAnswerPool(games, 2), [1, 2]);
+});
+
+// ── 정답 일정(시대 구분) ─────────────────────────────────────────────
+
+const legacy = Array.from({ length: 40 }, (_, i) => i + 1); // 구 풀 1..40
+const next = Array.from({ length: 50 }, (_, i) => i + 11); // 새 풀 11..60 (겹침 30개)
+const FROM = "2026-01-26"; // 퍼즐 26번 = 구 사이클 0의 26번째 날부터 새 풀
+const sched = (): AnswerSchedule => ({ legacyPool: legacy, pool: next, from: FROM });
+
+test("answerForDate: 전환일 이전은 구 풀 결과와 완전히 같다 (지난 정답 불변)", () => {
+  const s = sched();
+  for (let d = 0; d < 25; d++) {
+    const date = addDays("2026-01-01", d);
+    assert.equal(answerForDate(date, s), dailyAnswerFromSeed(date, legacy), date);
+  }
+});
+
+test("answerForDate: 전환 직후, 구 시대 현재 사이클에 나온 정답은 새 풀을 다 쓸 때까지 안 나온다", () => {
+  const s = sched();
+  const used = new Set(Array.from({ length: 25 }, (_, d) => answerForDate(addDays("2026-01-01", d), s)));
+  const usedInNext = next.filter((id) => used.has(id)).length;
+  const after = Array.from({ length: next.length }, (_, d) => answerForDate(addDays(FROM, d), s));
+  assert.equal(new Set(after).size, next.length); // 새 사이클 무중복
+  // 앞쪽(새 풀 중 안 나왔던 것 개수만큼)에는 이미 나온 정답이 없다
+  const freshCount = next.length - usedInNext;
+  assert.ok(after.slice(0, freshCount).every((id) => !used.has(id)));
+});
+
+test("answerForDate: 다음 사이클도 무중복이고 풀 안에서만 고른다", () => {
+  const s = sched();
+  const cyc = Array.from({ length: next.length }, (_, d) => answerForDate(addDays(FROM, next.length + d), s));
+  assert.equal(new Set(cyc).size, next.length);
+  assert.ok(cyc.every((id) => next.includes(id)));
+});
+
+test("resolvePuzzleDate: 없으면 오늘, 과거는 허용, 미래·형식 오류·EPOCH 이전은 거부", () => {
+  const today = "2026-11-11";
+  assert.equal(resolvePuzzleDate(null, today), today);
+  assert.equal(resolvePuzzleDate("", today), today);
+  assert.equal(resolvePuzzleDate("2026-08-14", today), "2026-08-14");
+  assert.equal(resolvePuzzleDate(today, today), today);
+  assert.equal(resolvePuzzleDate("2026-11-12", today), null); // 내일 정답 미리 풀기 차단
+  assert.equal(resolvePuzzleDate("2025-12-31", today), null);
+  assert.equal(resolvePuzzleDate("2026-02-31", today), null);
+  assert.equal(resolvePuzzleDate("20261111", today), null);
+});
+
+test("pool_v1.json(얼린 구 풀)이 실제 출제된 정답을 재현한다", async () => {
+  const { readFileSync } = await import("node:fs");
+  const pool = JSON.parse(readFileSync(new URL("./pool_v1.json", import.meta.url), "utf8"));
+  assert.equal(pool.length, 565);
+  // 라이브 /api/giveup으로 확인한 값 — 이게 깨지면 지난 문제·진행 중인 판이 바뀐다.
+  // (2026-08-14 같은 날은 KV로 고정돼 있어 시드값과 다르다 — 그건 KV가 계속 덮어쓴다.)
+  assert.equal(dailyAnswerFromSeed("2026-11-11", pool), 5418);
 });

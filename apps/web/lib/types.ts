@@ -57,6 +57,20 @@ export interface GuessResult {
    * 추측). 시리즈는 맞혔으니 편만 바꿔 보라는 신호. 서버가 판정해 내려준다.
    */
   sameSeries?: boolean;
+  /**
+   * 유사도 세 축(각 0~100, 가중치 적용 전). 오답일 때만 온다 — 정답이면 셋 다 100이라 의미 없음.
+   * 구버전 서버·저장분에는 없다.
+   */
+  parts?: SimilarityParts | null;
+  /** 채점 기준 퍼즐 날짜. 클라가 보던 판과 다르면 9시 경계를 넘긴 것 */
+  date?: string;
+}
+
+/** 테마(0.45)·진행방식(0.30)·수치(난이도·시간·인원, 0.25) 축별 유사도. */
+export interface SimilarityParts {
+  theme: number;
+  mech: number;
+  num: number;
 }
 
 export interface TodayInfo {

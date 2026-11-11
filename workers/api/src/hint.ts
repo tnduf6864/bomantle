@@ -91,7 +91,8 @@ export function buildHint(
       const type = g.types?.[0] ?? "";
       const catId = commonest(g.categories, index.idf);
       const theme = catId != null ? (cats[String(catId)] ?? "") : "";
-      return text(2, "타입 · 테마", [type, theme].filter(Boolean).join(" · "));
+      // 유형과 테마 이름이 같으면("추상전략 · 추상전략") 한 번만.
+      return text(2, "타입 · 테마", [...new Set([type, theme].filter(Boolean))].join(" · "));
     }
     case 3:
       return text(3, "난이도", g.weight != null ? weightBand(g.weight) : "");

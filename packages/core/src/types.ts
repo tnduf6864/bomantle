@@ -66,6 +66,13 @@ export interface ScoredGame {
   score: number;
 }
 
+/** 유사도 세 축(각 0~100, 가중치 적용 전). 테마 0.45 · 진행방식 0.30 · 수치 0.25로 합산된다. */
+export interface SimilarityParts {
+  theme: number;
+  mech: number;
+  num: number;
+}
+
 export interface GuessResult {
   id: number;
   score: number;

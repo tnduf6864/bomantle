@@ -3,18 +3,22 @@ import {
   rankAgainst,
   buildRankPositions,
   evaluateGuess,
+  similarityParts,
   type ScoredGame,
 } from "@bomantle/core";
 import gamesData from "./games.json";
 import catData from "./categories.json";
 import mechData from "./mechanisms.json";
 import boxartIds from "./boxart.json";
+import poolV1 from "./pool_v1.json";
 import {
   kstDate,
   puzzleNumber,
   baseName,
   buildAnswerPool,
-  dailyAnswerFromSeed,
+  answerForDate,
+  resolvePuzzleDate,
+  type AnswerSchedule,
 } from "./answer.ts";
 import { buildHint, type FullGame } from "./hint.ts";
 import { buildAnswerInfo } from "./reveal.ts";
@@ -33,6 +37,20 @@ const mechanisms = mechData as Record<string, string>;
 // 콜드 스타트 1회: 인덱스 + 정답 풀 구성 (isolate 동안 재사용)
 const index = buildIndex(games);
 const pool = buildAnswerPool(games);
+
+/**
+ * 새 정답 풀(bgg_id 묶음)이 적용되는 첫 날짜. 그 전 날짜는 얼려 둔 pool_v1.json으로
+ * 예전과 똑같이 계산된다(answer.ts AnswerSchedule).
+ *
+ * ⚠️ **배포일 이후 날짜로 둘 것.** 이미 지나간 날짜로 두면 그 사이 실제로 출제된
+ * 정답(구 풀)과 이 워커가 계산하는 정답(새 풀)이 갈라져, 진행 중인 판과 지난 문제가 깨진다.
+ */
+const POOL_V2_FROM = "2026-11-12";
+const schedule: AnswerSchedule = {
+  legacyPool: poolV1 as number[],
+  pool,
+  from: POOL_V2_FROM,
+};
 // id -> 게임. games.find()를 요청마다 돌리면 15,000개를 훑는다(정답 공개·힌트·추측 판정
 // 모두 이 조회가 필요하다). 콜드 스타트에 한 번만 만든다.
 const gameById = new Map(games.map((g) => [g.id, g]));
@@ -71,7 +89,7 @@ async function getDayState(env: Env, date: string): Promise<DayState> {
     if (v) answerId = Number(v);
   }
   if (answerId == null || !index.byId.has(answerId)) {
-    answerId = dailyAnswerFromSeed(date, pool);
+    answerId = answerForDate(date, schedule);
   }
 
   let rc = rankCache.get(answerId);
@@ -166,6 +184,10 @@ export default {
 
     const url = new URL(req.url);
     const date = kstDate();
+    // 지난 문제 다시 풀기: 추측·힌트·포기·순위는 ?date=로 과거 날짜를 받는다(오늘 이하만).
+    // 결과 제출·통계·접속 집계는 오늘 전용이라 이 값을 쓰지 않는다.
+    const puzzleDate = resolvePuzzleDate(url.searchParams.get("date"), date);
+    if (puzzleDate == null) return json({ error: "bad date" }, req, 400);
 
     // GET /api/today — 오늘 퍼즐 메타 (정답 비노출)
     if (url.pathname === "/api/today" && req.method === "GET") {
@@ -204,21 +226,28 @@ export default {
       if (!Number.isFinite(gameId) || !index.byId.has(gameId)) {
         return json({ error: "unknown game" }, req, 404);
       }
-      const day = await getDayState(env, date);
+      const day = await getDayState(env, puzzleDate);
       const result = evaluateGuess(day.ranking, day.pos, day.answerId, gameId);
+      // date: 채점 기준 날짜. 클라가 보던 판과 다르면(9시 경계를 넘김) 판을 새로 받는다.
       // win일 때만 정답 정보(이름·박스아트·사양) 동봉
       if (result.win) {
-        return json({ ...result, answer: revealAnswer(day.answerId) }, req);
+        return json({ ...result, date: puzzleDate, answer: revealAnswer(day.answerId) }, req);
       }
-      if (isSameSeries(gameId, day.answerId)) {
-        return json({ ...result, sameSeries: true }, req);
-      }
-      return json(result, req);
+      return json(
+        {
+          ...result,
+          date: puzzleDate,
+          // 테마·진행방식·수치 각 축의 유사도 — 어느 방향으로 좁힐지 추리하는 단서.
+          parts: similarityParts(index, day.answerId, gameId),
+          ...(isSameSeries(gameId, day.answerId) ? { sameSeries: true } : {}),
+        },
+        req,
+      );
     }
 
     // POST /api/giveup — 정답 공개
     if (url.pathname === "/api/giveup" && req.method === "POST") {
-      const day = await getDayState(env, date);
+      const day = await getDayState(env, puzzleDate);
       return json({ answer: revealAnswer(day.answerId) }, req);
     }
 
@@ -227,7 +256,7 @@ export default {
     // 1위 = 정답과 가장 가까운 게임이라 스포일러성이 있지만, /api/giveup이 이미
     // 정답 자체를 누구에게나 내주므로 새로 생기는 노출은 아니다.
     if (url.pathname === "/api/ranking" && req.method === "GET") {
-      const day = await getDayState(env, date);
+      const day = await getDayState(env, puzzleDate);
       const total = day.ranking.length; // 정답 자신은 제외된 수
       const page = parsePage(url.searchParams, total);
       return json(
@@ -235,7 +264,9 @@ export default {
         req,
         200,
         // 같은 날짜·같은 정답이면 항상 같은 응답. 정답 KV 오버라이드 반영 주기와 맞춘다.
-        { "Cache-Control": `public, max-age=${KV_CACHE_TTL}` },
+        // 오늘 판은 ?date= 없이 요청되므로 URL이 9시 경계를 넘어 같다 — 리셋 직후 어제 순위가
+        // 캐시에서 나오지 않게 짧게, 날짜가 박힌 지난 문제는 길게 잡는다.
+        { "Cache-Control": `public, max-age=${url.searchParams.has("date") ? 86_400 : 60}` },
       );
     }
 
@@ -284,7 +315,7 @@ export default {
       if (!Number.isInteger(level) || level < 1 || level > 8) {
         return json({ error: "bad level" }, req, 400);
       }
-      const day = await getDayState(env, date);
+      const day = await getDayState(env, puzzleDate);
       const ans = gameById.get(day.answerId)!;
       return json(buildHint(level, ans, index, categories, mechanisms), req);
     }

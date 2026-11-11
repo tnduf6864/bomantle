@@ -47,6 +47,18 @@ import { deviceId } from "../lib/device";
 import { FEEDBACK_URL } from "../lib/constants";
 import { clientPuzzleDate } from "../lib/reset";
 import { useKeyboardInsets, useScrollInputIntoView } from "../lib/keyboard";
+import {
+  buildShareText,
+  guessesUntilHint,
+  MAX_HINT_LEVEL,
+  parseArchiveDate,
+  puzzleNumberOf,
+  shareOrCopy,
+} from "../lib/play";
+import { Modal } from "../components/Modal";
+import { HelpModal } from "../components/HelpModal";
+import { ArchiveModal } from "../components/ArchiveModal";
+import { GuessParts } from "../components/GuessParts";
 import { AnswerCard } from "../components/AnswerCard";
 import { ResetCountdown } from "../components/ResetCountdown";
 import { TodayStatsCard } from "../components/TodayStatsCard";
@@ -64,43 +76,15 @@ function barColor(row: GuessRow): string {
 
 // 순위 근접도 라벨. 가까울수록 강한 표식 (🔥는 진짜 근접한 것만).
 function rankLabel(rank: number): string {
-  if (rank <= 10) return `🔥 ${rank}위`;
-  if (rank <= 50) return `🟠 ${rank}위`;
-  if (rank <= 300) return `🟡 ${rank}위`;
-  return `${rank}위`;
+  const r = rank.toLocaleString();
+  if (rank <= 10) return `🔥 ${r}위`;
+  if (rank <= 50) return `🟠 ${r}위`;
+  if (rank <= 300) return `🟡 ${r}위`;
+  return `${r}위`;
 }
 
-// 추측 횟수 → 별점 (적게 맞힐수록 ★ 많음).
-// 실제 플레이가 수십 회까지 퍼지므로 경계를 넓게 잡아 별 개수가 고르게 나오도록 함.
-function starRating(n: number): string {
-  const filled = n <= 4 ? 5 : n <= 9 ? 4 : n <= 16 ? 3 : n <= 30 ? 2 : 1;
-  return "★".repeat(filled) + "☆".repeat(5 - filled);
-}
-
-// 공유 텍스트. 정답 이름은 절대 넣지 않음.
-function buildShareText(
-  rows: GuessRow[],
-  hintCount: number,
-  streak = 0,
-  pct: PercentileResult | null = null,
-): string {
-  const solved = rows.some((r) => r.win);
-  const n = rows.length;
-  const head = `🎲 보맨틀`;
-  // 힌트 사용 횟수: 1회당 💀
-  const hintLine = hintCount > 0 ? `\n💡 힌트횟수 ${"💀".repeat(hintCount)}` : "";
-  // 연속 정답(2일 이상일 때만 자랑)
-  const streakLine = solved && streak >= 2 ? `\n🔥 연속 ${streak}일` : "";
-  // 백분위(표본이 충분할 때만). 순위·인원은 넣지 않는다 — 공유 시점마다 값이 달라 혼란.
-  const pctLine = solved && pct && !pct.pending ? `\n🏆 상위 ${pct.percentile}%` : "";
-  if (solved) {
-    return `${head}\n🎯 ${n}번 만에 맞혔어요!\n${starRating(n)}${pctLine}${streakLine}${hintLine}\n\nhttps://bomantle.pages.dev`;
-  }
-  // 포기: 가장 가까이 갔던 순위 (자랑 + 스포일러 없음)
-  const ranks = rows.filter((r) => !r.win).map((r) => r.rank);
-  const best = ranks.length ? Math.min(...ranks) : 0;
-  return `${head}\n🏳️ 포기 — 가장 가까웠던 순위 ${best}위\n${n}번 추측${hintLine}\n\nhttps://bomantle.pages.dev`;
-}
+// 첫 방문 안내를 이미 봤는지(게임 방법 모달 자동 표시용).
+const HELP_SEEN_KEY = "bomantle:helpSeen";
 
 // 전체 순위 목록을 한 번에 가져오는 개수(서버 MAX_LIMIT=200 이하).
 const RANK_PAGE = 100;
@@ -167,6 +151,12 @@ export default function Page() {
   const [pct, setPct] = useState<PercentileResult | null>(null);
   // 오늘 전체 현황(익명 집계). 백분위와 달리 포기자도 볼 수 있다.
   const [todayStats, setTodayStats] = useState<TodayStats | null>(null);
+  // 지난 문제 다시 풀기 중이면 그 날짜(URL ?d=). null = 오늘 판.
+  const [archiveDate, setArchiveDate] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  // 포기 확인(브라우저 confirm 대신 화면 안에서 한 번 더 묻는다)
+  const [confirmGiveup, setConfirmGiveup] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [backupText, setBackupText] = useState("");
   const [backupMsg, setBackupMsg] = useState("");
@@ -188,8 +178,10 @@ export default function Page() {
 
   // 특정 퍼즐 날짜의 판을 화면에 적용: 상태 초기화 후 로컬 저장(같은 날짜) 복원.
   // 최초 로드와 하루 경계(오전 9시) 자동 전환에서 공용.
-  const applyDay = useCallback((info: TodayInfo) => {
+  const applyDay = useCallback((info: TodayInfo, archive: string | null = null) => {
     setToday(info);
+    setArchiveDate(archive);
+    setConfirmGiveup(false);
     setVisitors(info.visitors ?? null);
     // 이전 판 상태 초기화
     setRows([]);
@@ -210,9 +202,9 @@ export default function Page() {
     inFlightRef.current.clear();
     pctAtRef.current = 0;
     statsAtRef.current = 0;
-    // 로컬 저장 복원 (같은 날짜만)
+    // 로컬 저장 복원 (같은 날짜만). 지난 문제도 같은 키 — 그날 플레이했으면 그 기록이 열린다.
     try {
-      const raw = localStorage.getItem(`bomantle:${info.date}`);
+      const raw = localStorage.getItem(`bomantle:${archive ?? info.date}`);
       if (!raw) return;
       const saved = JSON.parse(raw) as {
         rows: GuessRow[];
@@ -234,7 +226,7 @@ export default function Page() {
         setAnswerInfo(saved.answerInfo as AnswerInfo);
       } else if (saved.won) {
         // 구버전 저장(박스아트·링크만 또는 정보 없음) → 정답 정보 다시 가져와 복구
-        fetchGiveup()
+        fetchGiveup(archive)
           .then((r) => setAnswerInfo(r.answer))
           .catch(() => {});
       }
@@ -254,18 +246,32 @@ export default function Page() {
         return;
       }
       setDb(database);
-      applyDay(info);
+      const archive = parseArchiveDate(
+        new URLSearchParams(window.location.search).get("d"),
+        info.date,
+      );
+      applyDay(info, archive);
+      // 첫 방문이면 게임 방법을 한 번 띄운다.
+      try {
+        if (!localStorage.getItem(HELP_SEEN_KEY)) {
+          localStorage.setItem(HELP_SEEN_KEY, "1");
+          setShowHelp(true);
+        }
+      } catch {}
     })();
   }, [applyDay]);
 
+  // 지금 보고 있는 판의 날짜(지난 문제면 그 날짜).
+  const activeDate = archiveDate ?? today?.date ?? null;
+
   // 저장
   useEffect(() => {
-    if (!today) return;
+    if (!activeDate) return;
     localStorage.setItem(
-      `bomantle:${today.date}`,
+      `bomantle:${activeDate}`,
       JSON.stringify({ rows, won, answer, answerInfo, hints, pct }),
     );
-  }, [rows, won, answer, answerInfo, hints, pct, today]);
+  }, [rows, won, answer, answerInfo, hints, pct, activeDate]);
 
   // 오늘 첫 방문이면 접속 집계 핑 1회. localStorage 플래그로 같은 날짜 중복 집계 방지.
   // 플래그를 먼저 심으므로 핑이 실패하면 그날은 집계에서 빠짐(중복 집계보다 낫다).
@@ -290,28 +296,17 @@ export default function Page() {
     setStats(loadStats());
   }, []);
 
-  // 통계 모달: ESC로 닫기 + 열려 있는 동안 뒤 페이지 스크롤 잠금.
-  // 모바일에서 배경이 같이 스크롤되면 모달이 화면 밖으로 밀려 닫기가 어려워진다.
-  useEffect(() => {
-    if (!showStats) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setShowStats(false);
-    };
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [showStats]);
+  const closeStats = useCallback(() => setShowStats(false), []);
+  const closeHelp = useCallback(() => setShowHelp(false), []);
+  const closeArchive = useCallback(() => setShowArchive(false), []);
 
   // 게임 완료(정답/포기) 시 누적 통계 집계. 같은 날짜는 recordResult가 1회만 반영.
+  // 지난 문제는 집계하지 않는다 — 연속 기록이 과거 날짜로 꼬이고, 답을 아는 문제로 통계를 부풀릴 수 있다.
   useEffect(() => {
-    if (!won || !today) return;
+    if (!won || !today || archiveDate) return;
     const solved = rows.some((r) => r.win);
     setStats(recordResult(today.date, solved, rows.length, hints.length));
-  }, [won, today]);
+  }, [won, today, archiveDate]);
 
   /**
    * 결과 제출(정답·포기 모두) + 정답이면 백분위 조회. 서버가 멱등(같은 cid는 첫 기록 고정)이라
@@ -320,7 +315,7 @@ export default function Page() {
    * 실패는 조용히 무시 — 게임 진행과 무관한 부가 정보라 에러 UI를 띄우지 않는다.
    */
   const refreshPct = useCallback(async (force = false) => {
-    if (!today || !won) return;
+    if (!today || !won || archiveDate) return; // 결과 제출·백분위는 오늘 판 전용
     if (pctBusyRef.current) return;
     if (!force && Date.now() - pctAtRef.current < PCT_REFRESH_MS) return;
     const cid = deviceId();
@@ -336,7 +331,7 @@ export default function Page() {
     } finally {
       pctBusyRef.current = false;
     }
-  }, [today, won, rows, hints.length]);
+  }, [today, won, rows, hints.length, archiveDate]);
 
   /** 통계 모달 열기. 열 때 전체 현황을 함께 받아온다(안 보는 사람에겐 요청이 안 나감). */
   function openStats() {
@@ -350,7 +345,7 @@ export default function Page() {
     if (!force && Date.now() - statsAtRef.current < PCT_REFRESH_MS) return;
     statsBusyRef.current = true;
     try {
-      const s = await fetchStats();
+      const s = await fetchStats(force);
       statsAtRef.current = Date.now();
       if (s) setTodayStats(s);
     } catch {
@@ -363,9 +358,9 @@ export default function Page() {
   // 게임 완료 직후 1회(강제) + 탭 복귀 시 갱신(쓰로틀).
   // 제출이 먼저 끝나야 전체 현황에 내가 포함되므로 순서를 지킨다.
   useEffect(() => {
-    if (!won || !today) return;
+    if (!won || !today || archiveDate) return;
     refreshPct(true).then(() => refreshTodayStats(true));
-  }, [won, today]);
+  }, [won, today, archiveDate]);
 
   useEffect(() => {
     const onVisible = () => {
@@ -380,7 +375,7 @@ export default function Page() {
   // 하루 경계(오전 9시) 자동 전환: 탭을 열어둔 채 날짜가 넘어가면 서버에서 새 판을
   // 받아 자동 리셋. 클라 시계로 후보를 감지하되, 서버 date가 실제로 바뀐 경우에만 적용.
   useEffect(() => {
-    if (!today) return;
+    if (!today || archiveDate) return; // 지난 문제는 날짜가 고정이라 넘어갈 일이 없다
     let cooldownUntil = 0;
     const id = setInterval(async () => {
       if (rollingRef.current || Date.now() < cooldownUntil) return;
@@ -401,7 +396,7 @@ export default function Page() {
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [today, applyDay]);
+  }, [today, archiveDate, applyDay]);
 
   const guessedIds = useMemo(() => new Set(rows.map((r) => r.id)), [rows]);
 
@@ -423,7 +418,7 @@ export default function Page() {
     setRankError("");
     setRankLoading(true);
     try {
-      const page = await fetchRanking(rankItems.length, RANK_PAGE);
+      const page = await fetchRanking(rankItems.length, RANK_PAGE, archiveDate);
       setRankTotal(page.total);
       setRankItems((prev) => (prev.length === page.offset ? [...prev, ...page.items] : prev));
     } catch {
@@ -431,7 +426,7 @@ export default function Page() {
     } finally {
       setRankLoading(false);
     }
-  }, [rankItems.length]);
+  }, [rankItems.length, archiveDate]);
 
   // 처음 펼칠 때만 첫 페이지를 받는다(안 보는 사람에겐 요청이 안 나감).
   function toggleRanking() {
@@ -509,7 +504,15 @@ export default function Page() {
     }
     inFlightRef.current.add(game.id);
     try {
-      const res = await fetchGuess(game.id);
+      const res = await fetchGuess(game.id, archiveDate);
+      // 9시 경계를 넘겨 서버가 새 문제로 채점했다 — 어제 판에 오늘 점수를 섞지 않고 판을 넘긴다.
+      // (1초 롤오버 감지가 백그라운드 탭에서 늦게 도는 경우의 안전망)
+      if (!archiveDate && today && res.date && res.date !== today.date) {
+        const info = await fetchToday();
+        applyDay(info);
+        setError("새 문제가 시작됐어요! 다시 추측해 보세요.");
+        return;
+      }
       const row: GuessRow = { ...res, game, seq: ++seqRef.current };
       // 방어적 dedup: 동시 제출이 끼어들어도 같은 id 중복 추가 안 함
       setRows((prev) => (prev.some((r) => r.id === row.id) ? prev : [...prev, row]));
@@ -547,11 +550,14 @@ export default function Page() {
     setActiveIdx(0);
   }
 
+  // 다음 힌트까지 남은 추측 수(0이면 지금 열 수 있음).
+  const hintWait = guessesUntilHint(hints.length + 1, rows.length);
+
   async function getHint() {
-    if (hintLoading || hints.length >= 8) return;
+    if (hintLoading || hints.length >= MAX_HINT_LEVEL || hintWait > 0) return;
     setHintLoading(true);
     try {
-      const h = await fetchHint(hints.length + 1);
+      const h = await fetchHint(hints.length + 1, archiveDate);
       setHints((prev) => [...prev, h]);
     } catch {
       setError("힌트를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
@@ -561,11 +567,19 @@ export default function Page() {
   }
 
   async function shareResult() {
-    if (!today) return;
-    const text = buildShareText(rows, hints.length, stats?.curStreak ?? 0, pct);
+    if (!activeDate) return;
+    const text = buildShareText({
+      rows,
+      hintCount: hints.length,
+      puzzleNumber: puzzleNumberOf(activeDate),
+      archiveDate,
+      streak: stats?.curStreak ?? 0,
+      pct,
+    });
     try {
-      await navigator.clipboard.writeText(text);
-      setShareMsg("결과를 복사했어요! 붙여넣기로 공유하세요 📋");
+      const how = await shareOrCopy(text);
+      if (how === "cancelled") return;
+      setShareMsg(how === "shared" ? "공유했어요! 🎉" : "결과를 복사했어요! 붙여넣기로 공유하세요 📋");
     } catch {
       setShareMsg("복사가 안 됐어요. 텍스트를 길게 눌러 복사해주세요.");
     }
@@ -573,9 +587,9 @@ export default function Page() {
   }
 
   async function onGiveup() {
-    if (!confirm("정답을 공개할까요? (오늘 게임은 종료됩니다)")) return;
+    setConfirmGiveup(false);
     try {
-      const r = await fetchGiveup();
+      const r = await fetchGiveup(archiveDate);
       setAnswer(r.answer.name_ko);
       setAnswerInfo(r.answer);
       setWon(true);
@@ -628,6 +642,7 @@ export default function Page() {
       <div className="bar">
         <span style={{ width: `${row.win ? 100 : row.score}%`, background: barColor(row) }} />
       </div>
+      {row.parts && !row.win && <GuessParts parts={row.parts} />}
     </div>
   );
 
@@ -635,24 +650,51 @@ export default function Page() {
     <>
     <div className="wrap">
       <header className="top">
-        <button
-          className="stats-open"
-          onClick={openStats}
-          aria-label="통계 보기"
-          title="통계"
-        >
-          📊
-        </button>
+        <div className="head-btns left">
+          <button
+            className="head-btn"
+            onClick={() => setShowHelp(true)}
+            aria-label="게임 방법"
+            title="게임 방법"
+          >
+            ❓
+          </button>
+          <button
+            className="head-btn"
+            onClick={() => setShowArchive(true)}
+            disabled={!today}
+            aria-label="지난 문제"
+            title="지난 문제"
+          >
+            📅
+          </button>
+        </div>
+        <div className="head-btns right">
+          <button className="head-btn" onClick={openStats} aria-label="통계 보기" title="통계">
+            📊
+          </button>
+        </div>
         <h1>보맨틀 🎲</h1>
         <div className="sub">
-          {today
-            ? `${today.date} · 매일 보드게임 하나를 유사도로 맞혀보세요`
-            : "불러오는 중…"}
+          {!today
+            ? "불러오는 중…"
+            : archiveDate
+              ? `지난 문제 #${puzzleNumberOf(archiveDate)} · ${archiveDate}`
+              : `#${today.puzzleNumber} · ${today.date} · 매일 보드게임 하나를 유사도로 맞혀보세요`}
         </div>
-        {visitors != null && visitors > 0 && (
-          <div className="visitors">👥 오늘 {visitors.toLocaleString()}명 접속</div>
+        {archiveDate ? (
+          <div className="archive-banner">
+            📅 지난 문제를 풀고 있어요 · 통계에 기록되지 않아요
+            <a href="/">오늘 문제로 →</a>
+          </div>
+        ) : (
+          <>
+            {visitors != null && visitors > 0 && (
+              <div className="visitors">👥 오늘 {visitors.toLocaleString()}명 접속</div>
+            )}
+            <ResetCountdown />
+          </>
         )}
-        <ResetCountdown />
       </header>
 
       {won && (
@@ -661,14 +703,16 @@ export default function Page() {
             <>
               🎉 정답은 <b>{answer}</b>!
               <div className="banner-sub">
-                {rows.length}번 만에 맞혔어요 · 매일 오전 9시 새 문제로 다시 만나요
+                {rows.length}번 만에 맞혔어요 ·{" "}
+                {archiveDate ? "다른 지난 문제도 도전해 보세요" : "매일 오전 9시 새 문제로 다시 만나요"}
               </div>
             </>
           ) : (
             <>
               정답은 <b>{answer}</b> 였어요.
               <div className="banner-sub">
-                {rows.length}번 추측 후 포기 · 매일 오전 9시 새 문제로 다시 만나요
+                {rows.length}번 추측 후 포기 ·{" "}
+                {archiveDate ? "다른 지난 문제도 도전해 보세요" : "매일 오전 9시 새 문제로 다시 만나요"}
               </div>
             </>
           )}
@@ -680,7 +724,7 @@ export default function Page() {
             />
           )}
           {/* 포기한 사람에겐 백분위가 없다(표본이 정답자뿐). 대신 전체 현황을 보여준다. */}
-          {!rows.some((r) => r.win) && todayStats && todayStats.players > 0 && (
+          {!archiveDate && !rows.some((r) => r.win) && todayStats && todayStats.players > 0 && (
             <TodaySummaryCard
               players={todayStats.players}
               solved={todayStats.solved}
@@ -766,9 +810,15 @@ export default function Page() {
             <button className="share-btn" onClick={shareResult}>
               📋 결과 공유
             </button>
-            <button className="stats-btn" onClick={openStats}>
-              📊 통계
-            </button>
+            {archiveDate ? (
+              <button className="stats-btn" onClick={() => setShowArchive(true)}>
+                📅 지난 문제
+              </button>
+            ) : (
+              <button className="stats-btn" onClick={openStats}>
+                📊 통계
+              </button>
+            )}
           </div>
           {shareMsg && <div className="share-msg">{shareMsg}</div>}
         </div>
@@ -831,7 +881,9 @@ export default function Page() {
             )}
           </div>
           <div className="hint">
-            추측한 게임이 정답과 의미적으로 가까울수록 점수가 높아요. {rows.length}번 추측함
+            {today &&
+              `순위는 전체 ${(today.totalGames - 1).toLocaleString()}개 게임 중 정답과 가까운 순서예요 · `}
+            {rows.length}번 추측함
           </div>
 
           {(hints.length > 0 || !loading) && (
@@ -842,9 +894,15 @@ export default function Page() {
                   <span className="hint-value">{h.value}</span>
                 </div>
               ))}
-              {hints.length < 8 && (
-                <button className="hint-btn" onClick={getHint} disabled={hintLoading}>
-                  💡 힌트 보기 ({hints.length}/8)
+              {hints.length < MAX_HINT_LEVEL && (
+                <button
+                  className="hint-btn"
+                  onClick={getHint}
+                  disabled={hintLoading || hintWait > 0}
+                >
+                  {hintWait > 0
+                    ? `🔒 다음 힌트까지 ${hintWait}번 더 추측 (${hints.length}/${MAX_HINT_LEVEL})`
+                    : `💡 힌트 보기 (${hints.length}/${MAX_HINT_LEVEL})`}
                 </button>
               )}
             </div>
@@ -859,6 +917,12 @@ export default function Page() {
           🎯 첫 추측을 시작해보세요!
           <span>
             아는 보드게임 이름을 입력하면 정답과의 유사도를 알려드려요. (예: 카탄, 윙스팬)
+            <br />
+            처음이라면{" "}
+            <button className="link-btn" onClick={() => setShowHelp(true)}>
+              게임 방법
+            </button>
+            을 먼저 확인해 보세요.
           </span>
         </div>
       )}
@@ -888,7 +952,19 @@ export default function Page() {
 
       {!won && rows.length > 0 && (
         <div className="footer-actions">
-          <button onClick={onGiveup}>포기하고 정답 보기</button>
+          {confirmGiveup ? (
+            <div className="giveup-confirm">
+              <span>정답을 공개하면 이 문제는 끝나요. 포기할까요?</span>
+              <div>
+                <button className="danger" onClick={onGiveup}>
+                  포기하기
+                </button>
+                <button onClick={() => setConfirmGiveup(false)}>계속 도전</button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmGiveup(true)}>포기하고 정답 보기</button>
+          )}
         </div>
       )}
 
@@ -899,19 +975,13 @@ export default function Page() {
         <span className="credit">제작자: 문보미</span>
       </footer>
 
+      {showHelp && <HelpModal total={today ? today.totalGames - 1 : null} onClose={closeHelp} />}
+      {showArchive && today && (
+        <ArchiveModal today={today.date} current={archiveDate} onClose={closeArchive} />
+      )}
+
       {showStats && stats && (
-        <div className="modal-backdrop" onClick={() => setShowStats(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-head">
-              <h2>📊 통계</h2>
-              <button
-                className="modal-close"
-                onClick={() => setShowStats(false)}
-                aria-label="닫기"
-              >
-                ✕
-              </button>
-            </div>
+        <Modal title="📊 통계" onClose={closeStats}>
 
             {stats.played === 0 ? (
               <div className="stats-empty">
@@ -1039,8 +1109,7 @@ export default function Page() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
 
@@ -1065,8 +1134,9 @@ export default function Page() {
         </dd>
         <dt>힌트는 어떻게 쓰나요?</dt>
         <dd>
-          한 문제당 최대 8단계 힌트(박스아트 제외)를 순서대로 열람할 수 있으며,
-          힌트를 많이 볼수록 결과 공유 시 표시됩니다.
+          한 문제당 최대 8단계 힌트를 순서대로 열람할 수 있습니다. 첫 힌트는 바로,
+          이후 단계는 추측을 4번 할 때마다 하나씩 열리며, 사용한 힌트 수는 결과 공유에
+          표시됩니다.
         </dd>
         <dt>정답을 찾을 자신이 없으면요?</dt>
         <dd>포기 버튼으로 언제든 정답을 확인하고 다음 날 새 문제로 넘어갈 수 있습니다.</dd>

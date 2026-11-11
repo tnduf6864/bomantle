@@ -1,4 +1,11 @@
-import type { Game, GameIndex, IndexedGame, ScoredGame, GuessResult } from "./types.ts";
+import type {
+  Game,
+  GameIndex,
+  IndexedGame,
+  ScoredGame,
+  GuessResult,
+  SimilarityParts,
+} from "./types.ts";
 
 /** 결합 가중치: 테마 0.45 + 진행방식 0.30 + 수치 0.25 */
 export const THEME_WEIGHT = 0.45;
@@ -132,6 +139,26 @@ export function similarity(a: IndexedGame, b: IndexedGame, idx: GameIndex): numb
     MECH_WEIGHT * mechCosine(a, b) +
     NUM_WEIGHT * numericSim(a, b, idx.weightMean)
   );
+}
+
+/**
+ * 결합 유사도를 이루는 세 요소를 각각 0~100으로. 가중치를 곱하기 **전** 값이다 —
+ * "테마는 거의 같은데 진행방식이 멀다"처럼 어느 축을 바꿔야 할지 읽히게 하려는 용도라,
+ * 축마다 같은 눈금이어야 비교가 된다.
+ */
+export function similarityParts(
+  idx: GameIndex,
+  answerId: number,
+  guessId: number,
+): SimilarityParts | null {
+  const a = idx.byId.get(answerId);
+  const b = idx.byId.get(guessId);
+  if (!a || !b) return null;
+  return {
+    theme: toScore(tagCosine(a, b)),
+    mech: toScore(mechCosine(a, b)),
+    num: toScore(numericSim(a, b, idx.weightMean)),
+  };
 }
 
 /** 0~1 유사도를 0~100 표시 점수로. */

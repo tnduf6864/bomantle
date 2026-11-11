@@ -176,3 +176,20 @@ test("정규화 후 이름이 겹치면 랭킹 높은 쪽을 남긴다", () => {
   ]);
   assert.equal(resolve(dup, "티켓 투 라이드")?.id, 2);
 });
+
+test("단어 경계 접두: 대표작이 관사·부제 뒤에 이름을 둬도 스핀오프에 안 밀린다", () => {
+  const d = db([
+    { id: 1, ko: "카탄의 개척자", en: "The Settlers of Catan", rank: 50 },
+    { id: 2, ko: "카탄: 도시와 기사", en: "Catan: Cities & Knights", rank: 300 },
+  ]);
+  // 예전엔 대표작이 부분 일치 단계로 밀려 스핀오프 뒤에 나왔다.
+  assert.deepEqual(names(suggest(d, "catan")), ["카탄의 개척자", "카탄: 도시와 기사"]);
+});
+
+test("단어 경계 접두가 단어 중간 부분 일치보다 앞선다", () => {
+  const d = db([
+    { id: 1, ko: "뉴버밍엄", rank: 1 }, // 단어 중간 → 부분 일치
+    { id: 2, ko: "브라스: 버밍엄", rank: 2 }, // 단어 시작 → 접두 단계
+  ]);
+  assert.deepEqual(names(suggest(d, "버밍엄")), ["브라스: 버밍엄", "뉴버밍엄"]);
+});

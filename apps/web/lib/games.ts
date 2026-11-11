@@ -93,6 +93,27 @@ interface SearchEntry {
   en: string;
   /** 한글명의 초성 */
   cho: string;
+  /**
+   * 이름 안 **두 번째 단어부터** 시작하는 꼬리들(정규화). "The Settlers of Catan" →
+   * ["settlersofcatan", "catan"]. 대표작이 부제·관사 뒤에 이름을 둔 경우("catan")에도
+   * 접두 단계에서 잡히게 한다. 관사·전치사로 시작하는 꼬리("ofcatan")는 뺀다.
+   */
+  tails: string[];
+}
+
+const STOP_WORDS = new Set(["the", "a", "an", "of", "and", "to", "in", "on", "for", "&", "의"]);
+
+/** 단어 경계 꼬리 목록(SearchEntry.tails). 첫 단어(=이름 전체)는 이미 접두로 잡히니 제외. */
+function wordTails(name: string | null): string[] {
+  if (!name) return [];
+  const words = name.toLowerCase().split(/[\s:\-–—(),/·]+/).filter(Boolean);
+  const out: string[] = [];
+  for (let i = 1; i < words.length; i++) {
+    if (STOP_WORDS.has(words[i])) continue;
+    const t = norm(words.slice(i).join(""));
+    if (t.length >= 2) out.push(t);
+  }
+  return out;
 }
 
 export interface GameDB {
@@ -128,7 +149,15 @@ export function buildGameDB(
       const prev = exact.get(key);
       if (!prev || rankOf(g) < rankOf(prev)) exact.set(key, g);
     }
-    if (ko || en) entries.push({ game: g, ko, en, cho: chosung(ko) });
+    if (ko || en) {
+      entries.push({
+        game: g,
+        ko,
+        en,
+        cho: chosung(ko),
+        tails: [...wordTails(g.name_ko), ...wordTails(g.name_en)],
+      });
+    }
   }
 
   entries.sort((a, b) => rankOf(a.game) - rankOf(b.game));
@@ -192,7 +221,10 @@ export function suggest(
   };
 
   stage((e) => e.ko === q || e.en === q);
-  stage((e) => e.ko.startsWith(q) || e.en.startsWith(q));
+  // 단어 경계 접두도 같은 단계 — 랭킹순으로 섞여야 "catan"에서 대표작이 스핀오프에 안 밀린다.
+  stage(
+    (e) => e.ko.startsWith(q) || e.en.startsWith(q) || e.tails.some((t) => t.startsWith(q)),
+  );
   stage((e) => e.ko.includes(q) || e.en.includes(q));
 
   // 초성은 자모가 섞인 입력에서만 — 안 그러면 다 타이핑한 이름까지 같은 초성 게임들로 퍼진다.

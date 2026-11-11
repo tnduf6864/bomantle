@@ -10,14 +10,21 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "";
 
+/**
+ * 지난 문제 날짜를 쿼리로. 오늘 판이면(null) 아무것도 안 붙인다 — 서버가 오늘로 처리하고,
+ * 오늘 판 URL이 예전과 같아야 캐시·구버전 호환이 그대로다.
+ */
+const dateQ = (date: string | null | undefined, sep: "?" | "&") =>
+  date ? `${sep}date=${encodeURIComponent(date)}` : "";
+
 export async function fetchToday(): Promise<TodayInfo> {
   const r = await fetch(`${BASE}/api/today`);
   if (!r.ok) throw new Error("today failed");
   return r.json();
 }
 
-export async function fetchGuess(gameId: number): Promise<GuessResult> {
-  const r = await fetch(`${BASE}/api/guess`, {
+export async function fetchGuess(gameId: number, date?: string | null): Promise<GuessResult> {
+  const r = await fetch(`${BASE}/api/guess${dateQ(date, "?")}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ gameId }),
@@ -26,8 +33,8 @@ export async function fetchGuess(gameId: number): Promise<GuessResult> {
   return r.json();
 }
 
-export async function fetchHint(level: number): Promise<HintData> {
-  const r = await fetch(`${BASE}/api/hint?level=${level}`);
+export async function fetchHint(level: number, date?: string | null): Promise<HintData> {
+  const r = await fetch(`${BASE}/api/hint?level=${level}${dateQ(date, "&")}`);
   if (!r.ok) throw new Error("hint failed");
   return r.json();
 }
@@ -40,8 +47,12 @@ export async function fetchVisit(): Promise<{ visitors: number | null }> {
 }
 
 // 정답 공개 후 전체 유사도 순위 한 페이지. 정답 자신은 목록에 없다(1위 = 가장 가까운 게임).
-export async function fetchRanking(offset = 0, limit = 100): Promise<RankingPage> {
-  const r = await fetch(`${BASE}/api/ranking?offset=${offset}&limit=${limit}`);
+export async function fetchRanking(
+  offset = 0,
+  limit = 100,
+  date?: string | null,
+): Promise<RankingPage> {
+  const r = await fetch(`${BASE}/api/ranking?offset=${offset}&limit=${limit}${dateQ(date, "&")}`);
   if (!r.ok) throw new Error("ranking failed");
   return r.json();
 }
@@ -67,16 +78,22 @@ export async function fetchResult(
   return "available" in data ? null : data;
 }
 
-/** 오늘 전체 현황(익명 집계). 쓰기 없음 — 제출과 무관하게 아무나 볼 수 있다. */
-export async function fetchStats(): Promise<TodayStats | null> {
-  const r = await fetch(`${BASE}/api/stats`);
+/**
+ * 오늘 전체 현황(익명 집계). 쓰기 없음 — 제출과 무관하게 아무나 볼 수 있다.
+ *
+ * `fresh`: 서버가 `max-age=60`을 붙여서, 평범한 fetch는 방금 내 결과를 제출했어도
+ * 브라우저 캐시의 1분 전 응답을 준다(그날 첫 정답자는 "아직 아무도 없어요"를 봤다).
+ * 제출 직후 재조회에서는 캐시를 건너뛴다.
+ */
+export async function fetchStats(fresh = false): Promise<TodayStats | null> {
+  const r = await fetch(`${BASE}/api/stats`, fresh ? { cache: "no-store" } : undefined);
   if (!r.ok) throw new Error("stats failed");
   const data = (await r.json()) as TodayStats | { available: false };
   return "available" in data ? null : data;
 }
 
-export async function fetchGiveup(): Promise<{ answer: AnswerInfo }> {
-  const r = await fetch(`${BASE}/api/giveup`, { method: "POST" });
+export async function fetchGiveup(date?: string | null): Promise<{ answer: AnswerInfo }> {
+  const r = await fetch(`${BASE}/api/giveup${dateQ(date, "?")}`, { method: "POST" });
   if (!r.ok) throw new Error("giveup failed");
   return r.json();
 }

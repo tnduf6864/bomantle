@@ -4,7 +4,16 @@ import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import type { Game } from "./types.ts";
-import { buildIndex, rankAgainst, toScore, similarity } from "./engine.ts";
+import {
+  buildIndex,
+  rankAgainst,
+  toScore,
+  similarity,
+  similarityParts,
+  THEME_WEIGHT,
+  MECH_WEIGHT,
+  NUM_WEIGHT,
+} from "./engine.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 // 데이터 산출물(data/out)은 gitignore이므로 CI/새 클론에는 없다.
@@ -54,4 +63,17 @@ test("결합 엔진: 쌍둥이 게임 고득점 (브라스 버밍엄 vs 랭커�
 test("랭킹은 내림차순 정렬", () => {
   const r = rankAgainst(idx, byName("카탄").id);
   for (let i = 1; i < r.length; i++) assert.ok(r[i - 1].score >= r[i].score);
+});
+
+test("similarityParts: 세 축을 가중 합산하면 결합 점수와 같다", () => {
+  const gloom = byName("글룸헤이븐");
+  const ranking = rankAgainst(idx, gloom.id);
+  for (const r of [ranking[0], ranking[50], ranking[5000]]) {
+    const p = similarityParts(idx, gloom.id, r.id)!;
+    for (const v of [p.theme, p.mech, p.num]) assert.ok(v >= 0 && v <= 100);
+    const sum = THEME_WEIGHT * p.theme + MECH_WEIGHT * p.mech + NUM_WEIGHT * p.num;
+    // 축마다 0.1 단위로 반올림돼 있어 합산에 그만큼 오차가 남는다.
+    assert.ok(Math.abs(sum - r.score) < 0.2, `parts ${JSON.stringify(p)} vs ${r.score}`);
+  }
+  assert.equal(similarityParts(idx, gloom.id, -1), null);
 });

@@ -92,10 +92,14 @@ export const POOL_MAX_RANK = 5500;
  * 정답 후보 풀. 잘 알려지고 단독 플레이 가능한 게임만:
  *  - 종합 순위 POOL_MAX_RANK 이내, 난이도/인원 데이터 존재, 태그 2개 이상
  *  - 평가 수 minReviews개 이상 (마이너·인지도 낮은 게임 정답에서 제외)
- *  - 같은 프랜차이즈는 가장 높은 랭킹 1개만 (아줄:신트라 등 확장 제외)
+ *  - **같은 BGG 게임**(bgg_id)은 가장 높은 랭킹 1개만 — 같은 게임의 판·에디션 변형 제거
  *  - 랭킹 상위 위주(기본 1200개)
  *
- * 실측 풀 크기(전수 크롤 21,194개 기준): minReviews 50→565개, 100→322개, 200→145개.
+ * 묶음 키가 예전엔 `baseName`(제목 앞부분)이었다. 그러면 "브라스: 버밍엄"과 "브라스: 랭커셔",
+ * "도미니언"과 "도미니언: 장막뒤의 사람들"처럼 **BGG 기준으로 다른 게임**이 하나로 묶여
+ * 진 쪽이 정답에서 영구 제외됐다(탈락 56개 중 52개). 이제 형제를 맞혔을 때 "같은 시리즈"
+ * 배지가 뜨므로(isSameSeries) 형제가 각자 정답이 돼도 억울하지 않다.
+ * bgg_id가 없는 게임은 이름 기준으로 폴백한다(실측 자격 게임은 전부 bgg_id가 있다).
  */
 export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): number[] {
   const eligible = games.filter(
@@ -107,14 +111,13 @@ export function buildAnswerPool(games: Game[], limit = 1200, minReviews = 50): n
       g.players_min != null &&
       (g.review_count ?? 0) >= minReviews,
   );
-  // 프랜차이즈별 최상위만
-  const bestByBase = new Map<string, Game>();
+  const bestByKey = new Map<string, Game>();
   for (const g of eligible) {
-    const key = baseName(g);
-    const cur = bestByBase.get(key);
-    if (!cur || (g.rank ?? 1e9) < (cur.rank ?? 1e9)) bestByBase.set(key, g);
+    const key = g.bgg_id != null ? `bgg:${g.bgg_id}` : `name:${baseName(g)}`;
+    const cur = bestByKey.get(key);
+    if (!cur || (g.rank ?? 1e9) < (cur.rank ?? 1e9)) bestByKey.set(key, g);
   }
-  return [...bestByBase.values()]
+  return [...bestByKey.values()]
     .sort((a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9))
     .slice(0, limit)
     .map((g) => g.id);
@@ -140,4 +143,89 @@ export function dailyAnswerFromSeed(date: string, pool: number[]): number {
   const n = pool.length;
   const i = puzzleNumber(date) - 1;
   return shuffled(pool, hash(`cycle:${Math.floor(i / n)}`))[mod(i, n)];
+}
+
+/** YYYY-MM-DD에 일수를 더한다(UTC 자정 기준 — 날짜 문자열 산술 전용). */
+export function addDays(date: string, days: number): string {
+  return new Date(Date.parse(date + "T00:00:00Z") + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+}
+
+/**
+ * 정답 일정 — 풀이 바뀌어도 **지난 정답과 진행 중인 판이 흔들리지 않게** 시대를 나눈다.
+ *
+ * 순열은 풀 내용에 따라 통째로 달라진다. 풀 규칙을 바꾸거나 데이터를 재크롤하면 같은
+ * 날짜의 정답이 바뀌어, 지난 문제 다시 풀기가 엉뚱한 답을 내고 사이클 무중복 보장도
+ * 깨진다. 그래서:
+ *
+ *  - `from` 이전 날짜: 그 시점 풀을 **얼려 둔 목록**(`legacyPool`, pool_v1.json)으로
+ *    예전과 똑같이 계산한다. games.json이 바뀌어도 결과가 그대로다.
+ *  - `from` 이후 첫 사이클: 새 풀에서 **구 시대 현재 사이클에 이미 나온 정답을 뒤로 미룬**
+ *    순서. 시대가 바뀌는 날 바로 며칠 전 정답이 다시 나오는 일을 막는다.
+ *  - 그다음 사이클부터는 새 풀을 평범하게 섞는다.
+ */
+export interface AnswerSchedule {
+  legacyPool: number[];
+  pool: number[];
+  /** 새 풀이 적용되는 첫 날짜(YYYY-MM-DD) */
+  from: string;
+}
+
+const eraCache = new WeakMap<AnswerSchedule, Map<number, number[]>>();
+
+/** 새 시대 c번째 사이클의 순열(메모이즈 — 요청마다 셔플하지 않는다). */
+function eraCycle(s: AnswerSchedule, c: number): number[] {
+  let m = eraCache.get(s);
+  if (!m) eraCache.set(s, (m = new Map()));
+  const hit = m.get(c);
+  if (hit) return hit;
+
+  let order: number[];
+  if (c === 0) {
+    // 구 시대의 현재 사이클에서 이미 나온 정답들.
+    const lastLegacy = puzzleNumber(s.from) - 1; // 마지막 구 시대 퍼즐 번호
+    const n = s.legacyPool.length;
+    const cycleStart = lastLegacy > 0 ? Math.floor((lastLegacy - 1) / n) * n + 1 : 1;
+    const used = new Set<number>();
+    for (let p = cycleStart; p <= lastLegacy; p++) {
+      used.add(dailyAnswerFromSeed(addDays(s.from, p - lastLegacy - 1), s.legacyPool));
+    }
+    const fresh = s.pool.filter((id) => !used.has(id));
+    const seen = s.pool.filter((id) => used.has(id));
+    order = [
+      ...shuffled(fresh, hash(`v2:cycle:0:fresh`)),
+      ...shuffled(seen, hash(`v2:cycle:0:seen`)),
+    ];
+  } else {
+    order = shuffled(s.pool, hash(`v2:cycle:${c}`));
+  }
+  m.set(c, order);
+  return order;
+}
+
+/** 날짜의 정답 id(KV 오버라이드 제외). 시대 구분은 AnswerSchedule 참고. */
+export function answerForDate(date: string, s: AnswerSchedule): number {
+  if (date < s.from) return dailyAnswerFromSeed(date, s.legacyPool);
+  if (s.pool.length === 0) throw new Error("answer pool is empty");
+  const i = puzzleNumber(date) - puzzleNumber(s.from);
+  const n = s.pool.length;
+  return eraCycle(s, Math.floor(i / n))[i % n];
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 지난 문제 요청의 날짜 검증. 형식이 맞고, 퍼즐 1번 이후이며, **오늘을 넘지 않을 때만**
+ * 그 날짜를 돌려준다 — 미래 날짜를 받으면 내일 정답을 미리 풀 수 있다.
+ * 파라미터가 없으면 오늘. 잘못된 값이면 null(호출부가 400).
+ */
+export function resolvePuzzleDate(param: string | null, today: string): string | null {
+  if (param == null || param === "") return today;
+  if (!DATE_RE.test(param)) return null;
+  // 2026-02-31 같은 값은 Date가 3월로 넘겨 버리므로 왕복해서 같은지 본다.
+  const t = Date.parse(param + "T00:00:00Z");
+  if (Number.isNaN(t) || new Date(t).toISOString().slice(0, 10) !== param) return null;
+  if (puzzleNumber(param) < 1 || param > today) return null;
+  return param;
 }

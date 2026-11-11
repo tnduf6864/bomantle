@@ -55,6 +55,9 @@ cd data
 #   out/categories.json → workers/api/src/ 및 apps/web/public/
 #   out/mechanisms.json → workers/api/src/ (힌트용)
 
+# 정답 후보 박스아트(증분, 정답 풀 규칙은 answer.ts를 그대로 import):
+node data/fetch_boxart.mjs                # (루트에서) → apps/web/public/boxart + workers/api/src/boxart.json
+
 # 필드만 고쳐야 할 때는 전수 크롤 대신 패치 스크립트를 쓴다(원본 HTML을 남기지 않아
 # 재파싱이 안 되므로 해당 필드만 다시 받는다):
 ./.venv/Scripts/python patch_time.py      # 플레이타임 time_min/time_max 재수집(확장 제외 ~65분)
@@ -76,7 +79,9 @@ pnpm --filter @bomantle/web exec wrangler pages deploy out --project-name bomant
 
 ### 일일 정답 관리
 
-- 기본: 날짜 시드 결정론으로 정답 풀(종합 5,500위 이내 · 평가 50+ · 프랜차이즈 중복 제거)에서 자동 선택.
+- 기본: 날짜 시드 결정론으로 정답 풀(종합 5,500위 이내 · 평가 50+ · 같은 BGG 게임 중복 제거)에서 자동 선택.
+- 풀이 바뀌면 순서도 바뀐다. 그래서 `POOL_V2_FROM` 이전 날짜는 얼린 `pool_v1.json`으로 계산한다
+  (지난 문제 다시 풀기·진행 중인 판 보호). **`POOL_V2_FROM`은 반드시 배포일 이후 날짜로.**
 - 수동 지정: KV에 `answer:YYYY-MM-DD = <gameId>` 저장하면 그날 정답을 덮어씀.
 
 ## 비고 / TODO
