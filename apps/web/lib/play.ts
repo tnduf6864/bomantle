@@ -54,6 +54,21 @@ export function statusOf(saved: { rows?: GuessRow[]; won?: boolean } | null): {
 export const MAX_HINT_LEVEL = 8;
 
 /**
+ * 힌트 단계 이름 기본값. 원본은 워커 `hint.ts` HINT_LABELS이고 `/api/today`로 내려온다 —
+ * 이건 응답에 없을 때(구버전 서버) 쓰는 폴백이라 같게 유지할 것.
+ */
+export const DEFAULT_HINT_LABELS = [
+  "인원 · 플레이타임",
+  "웨이트",
+  "유형 · 출시 연대",
+  "테마",
+  "메커니즘 · 베스트 인원",
+  "인기도",
+  "특징 태그",
+  "디자이너 · 연도 · 글자 수",
+];
+
+/**
  * 힌트 k단계는 추측을 (k-1)×HINT_EVERY번 한 뒤에 열린다(1단계는 처음부터).
  *
  * 예전엔 8단계를 바로 다 열 수 있어서 초성(8단계)까지 직행하면 추리할 게 남지 않았다.

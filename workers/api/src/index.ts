@@ -20,7 +20,7 @@ import {
   resolvePuzzleDate,
   type AnswerSchedule,
 } from "./answer.ts";
-import { buildHint, type FullGame } from "./hint.ts";
+import { buildHint, HINT_LABELS, type FullGame } from "./hint.ts";
 import { buildAnswerInfo } from "./reveal.ts";
 import { parsePage, sliceRanking } from "./ranklist.ts";
 import { sanitizeSubmission } from "./rank.ts";
@@ -197,6 +197,8 @@ export default {
           puzzleNumber: puzzleNumber(date),
           totalGames: games.length,
           poolSize: pool.length,
+          // 힌트 단계 이름 — 클라가 "다음 힌트: 웨이트"처럼 미리 보여준다.
+          hintLabels: HINT_LABELS,
           visitors: await visitorCount(env, date),
         },
         req,

@@ -104,14 +104,18 @@ export function mechCosine(a: IndexedGame, b: IndexedGame): number {
   return cosine(a.mvec, a.mnorm, b.mvec, b.mnorm);
 }
 
+/** 난이도(weight) 유사도 (0~1): 범위 ~1-5, 차이 2.5에서 0. 결측은 전체 평균으로 대체. */
+export function weightSim(a: IndexedGame, b: IndexedGame, weightMean: number): number {
+  const w1 = a.weight ?? weightMean;
+  const w2 = b.weight ?? weightMean;
+  return Math.max(0, 1 - Math.abs(w1 - w2) / 2.5);
+}
+
 /** 난이도/시간/인원 기반 수치 유사도 (0~1). 사용 가능한 항목 평균. */
 export function numericSim(a: IndexedGame, b: IndexedGame, weightMean: number): number {
   const sims: number[] = [];
 
-  // 난이도(weight): 범위 ~1-5, 차이 2.5에서 0
-  const w1 = a.weight ?? weightMean;
-  const w2 = b.weight ?? weightMean;
-  sims.push(Math.max(0, 1 - Math.abs(w1 - w2) / 2.5));
+  sims.push(weightSim(a, b, weightMean));
 
   // 플레이 시간: 로그 스케일. 상한값 기준(IndexedGame.timeMax 주석 참고)
   if (a.timeMax && b.timeMax) {
@@ -158,6 +162,7 @@ export function similarityParts(
     theme: toScore(tagCosine(a, b)),
     mech: toScore(mechCosine(a, b)),
     num: toScore(numericSim(a, b, idx.weightMean)),
+    weight: toScore(weightSim(a, b, idx.weightMean)),
   };
 }
 

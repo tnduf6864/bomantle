@@ -50,6 +50,7 @@ import { useKeyboardInsets, useScrollInputIntoView } from "../lib/keyboard";
 import {
   buildShareText,
   guessesUntilHint,
+  DEFAULT_HINT_LABELS,
   MAX_HINT_LEVEL,
   parseArchiveDate,
   puzzleNumberOf,
@@ -552,6 +553,8 @@ export default function Page() {
 
   // 다음 힌트까지 남은 추측 수(0이면 지금 열 수 있음).
   const hintWait = guessesUntilHint(hints.length + 1, rows.length);
+  const nextHintLabel =
+    (today?.hintLabels ?? DEFAULT_HINT_LABELS)[hints.length] ?? `${hints.length + 1}단계`;
 
   async function getHint() {
     if (hintLoading || hints.length >= MAX_HINT_LEVEL || hintWait > 0) return;
@@ -901,8 +904,8 @@ export default function Page() {
                   disabled={hintLoading || hintWait > 0}
                 >
                   {hintWait > 0
-                    ? `🔒 다음 힌트까지 ${hintWait}번 더 추측 (${hints.length}/${MAX_HINT_LEVEL})`
-                    : `💡 힌트 보기 (${hints.length}/${MAX_HINT_LEVEL})`}
+                    ? `🔒 다음 힌트 "${nextHintLabel}" — ${hintWait}번 더 추측하면 열려요 (${hints.length}/${MAX_HINT_LEVEL})`
+                    : `💡 다음 힌트: ${nextHintLabel} (${hints.length}/${MAX_HINT_LEVEL})`}
                 </button>
               )}
             </div>
@@ -1134,8 +1137,9 @@ export default function Page() {
         </dd>
         <dt>힌트는 어떻게 쓰나요?</dt>
         <dd>
-          한 문제당 최대 8단계 힌트를 순서대로 열람할 수 있습니다. 첫 힌트는 바로,
-          이후 단계는 추측을 4번 할 때마다 하나씩 열리며, 사용한 힌트 수는 결과 공유에
+          한 문제당 최대 8단계 힌트(인원·플레이타임, 웨이트, 유형·출시 연대, 테마,
+          메커니즘, 인기도, 특징 태그, 디자이너)를 순서대로 열람할 수 있습니다. 첫 힌트는
+          바로, 이후 단계는 추측을 4번 할 때마다 하나씩 열리며, 사용한 힌트 수는 결과 공유에
           표시됩니다.
         </dd>
         <dt>정답을 찾을 자신이 없으면요?</dt>

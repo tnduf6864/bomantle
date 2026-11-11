@@ -66,11 +66,15 @@ export interface ScoredGame {
   score: number;
 }
 
-/** 유사도 세 축(각 0~100, 가중치 적용 전). 테마 0.45 · 진행방식 0.30 · 수치 0.25로 합산된다. */
+/**
+ * 축별 유사도(각 0~100, 가중치 적용 전). 결합 점수는 테마 0.45 · 진행방식 0.30 · 수치 0.25.
+ * `weight`는 수치 중 난이도만 따로 뗀 **표시용** 값이다(합산에는 num으로 이미 들어가 있다).
+ */
 export interface SimilarityParts {
   theme: number;
   mech: number;
   num: number;
+  weight: number;
 }
 
 export interface GuessResult {

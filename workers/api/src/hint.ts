@@ -16,29 +16,55 @@ export interface HintData {
   kind: "text" | "image";
 }
 
-const CHO = [
-  "ㄱ", "ㄲ", "ㄴ", "ㄷ", "ㄸ", "ㄹ", "ㅁ", "ㅂ", "ㅃ", "ㅅ",
-  "ㅆ", "ㅇ", "ㅈ", "ㅉ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ",
-];
-
-/** 한글 문자열 → 초성. 비한글(숫자/영문/기호)은 그대로, 공백 유지. */
-function chosung(s: string): string {
-  let out = "";
-  for (const ch of s) {
-    const code = ch.charCodeAt(0);
-    if (code >= 0xac00 && code <= 0xd7a3) {
-      out += CHO[Math.floor((code - 0xac00) / 588)];
-    } else {
-      out += ch;
-    }
-  }
-  return out;
-}
+/**
+ * 단계 이름. 클라가 **다음 힌트가 무엇인지** 미리 보여 주는 데 쓴다(`/api/today`로 내려간다).
+ * 순서 = 약한 힌트 → 강한 힌트. 개수(8)는 통계의 힌트 분포(0..8)·공유 💀와 묶여 있어 유지한다.
+ *
+ * 2026-11 개편: 초성(사실상 정답 공개)을 빼고, 정확한 출시연도·디자이너처럼 아는 사람에겐
+ * 한 방인 힌트를 뒤로 미뤘다. 대신 정답의 태그를 단계적으로 알려 줘서 추측 막대(테마·메커니즘)를
+ * 올릴 방향을 잡게 한다.
+ */
+export const HINT_LABELS = [
+  "인원 · 플레이타임",
+  "웨이트",
+  "유형 · 출시 연대",
+  "테마",
+  "메커니즘 · 베스트 인원",
+  "인기도",
+  "특징 태그",
+  "디자이너 · 연도 · 글자 수",
+] as const;
 
 /** 난이도를 0.5 폭 밴드로 (예: 3.79 → "3.5 ~ 4.0"). */
 function weightBand(w: number): string {
   const lo = Math.floor(w * 2) / 2;
   return `${lo.toFixed(1)} ~ ${(lo + 0.5).toFixed(1)}`;
+}
+
+/** 웨이트 밴드 + 체감 표현 (예: 3.79 → "3.5 ~ 4.0 (무거움)"). */
+function weightText(w: number): string {
+  const feel = w < 2 ? "가벼움" : w < 3 ? "중간" : w < 4 ? "무거움" : "매우 무거움";
+  return `${weightBand(w)} (${feel})`;
+}
+
+/** "1992" → "1990년대". 미상("0"·없음)이면 빈 문자열. */
+function decade(year: string | null): string {
+  const y = Number(year);
+  return y > 0 ? `${Math.floor(y / 10) * 10}년대` : "";
+}
+
+/** 보드라이프 종합 순위 → 대략적인 구간. 정확한 순위는 정답을 특정하므로 감춘다. */
+function rankBand(rank: number | null): string {
+  if (rank == null) return "";
+  for (const top of [50, 100, 300, 500, 1000, 2000, 3000]) {
+    if (rank <= top) return `보드라이프 상위 ${top.toLocaleString()}위 안`;
+  }
+  return "보드라이프 상위 5,500위 안";
+}
+
+/** 디자이너 미상 표기("불확실 (uncredited)" 등)는 힌트로서 정보가 없으니 뺀다. */
+function knownDesigners(g: FullGame): string[] {
+  return (g.designers ?? []).filter((d) => d && !/불확실|uncredited|unknown/i.test(d));
 }
 
 /** 태그 중 가장 흔한(idf 최소) 1개 id — 정답이 콕 집히지 않도록. */
@@ -55,6 +81,51 @@ function commonest(ids: number[], idf: Map<number, number>): number | undefined 
   return best;
 }
 
+/**
+ * 4단계 테마 태그: 가장 흔한 카테고리 — 단, 3단계 유형과 **이름이 같은 것은 건너뛴다**
+ * ("추상전략" 유형 + "추상전략" 테마가 두 번 나오면 힌트 한 칸이 공짜로 날아간다).
+ * 다른 태그가 없으면 그것이라도 쓴다.
+ */
+function themeTagId(g: FullGame, index: GameIndex, cats: Record<string, string>): number | undefined {
+  const type = g.types?.[0];
+  const others = g.categories.filter((c) => cats[String(c)] !== type);
+  return commonest(others.length ? others : g.categories, index.idf);
+}
+
+/**
+ * 가장 **드문**(idf 최대) 태그 — 정답을 가장 잘 좁히는 단서. 4·5단계에서 이미 보여준
+ * 태그(가장 흔한 것)는 제외하고, 테마·메커니즘을 함께 본다.
+ */
+function rarestTag(
+  g: FullGame,
+  index: GameIndex,
+  cats: Record<string, string>,
+  mechs: Record<string, string>,
+): string {
+  const shown = new Set<string>();
+  const cId = themeTagId(g, index, cats);
+  const type = g.types?.[0];
+  const mId = commonest(g.mechanisms ?? [], index.midf);
+  if (cId != null) shown.add(`c${cId}`);
+  if (mId != null) shown.add(`m${mId}`);
+
+  let best = "";
+  let bestIdf = -Infinity;
+  const consider = (key: string, name: string | undefined, idf: number | undefined, kind: string) => {
+    if (!name || shown.has(key) || idf == null || idf <= bestIdf) return;
+    bestIdf = idf;
+    best = `${name} (${kind})`;
+  };
+  for (const c of g.categories) {
+    if (cats[String(c)] === type) continue; // 3단계 유형으로 이미 나온 이름
+    consider(`c${c}`, cats[String(c)], index.idf.get(c), "테마");
+  }
+  for (const m of g.mechanisms ?? []) {
+    consider(`m${m}`, mechs[String(m)], index.midf.get(m), "메커니즘");
+  }
+  return best;
+}
+
 function text(level: number, label: string, value: string): HintData {
   return { level, label, value: value || "정보 없음", kind: "text" };
 }
@@ -67,10 +138,8 @@ function playtimeSuffix(g: FullGame): string {
 }
 
 /**
- * 단계별 힌트(8단계). 정답 이름은 7·8단계의 글자수·초성 외에는 노출하지 않음.
- * 박스아트는 정답 공개 시에만 보여주므로 힌트에서 제외.
- * 1 인원·시간 / 2 타입+테마 / 3 난이도밴드 / 4 진행방식+베스트인원 /
- * 5 출시연도 / 6 디자이너 / 7 글자수 / 8 초성
+ * 단계별 힌트(8단계, HINT_LABELS 순서). 정답 이름은 8단계의 글자 수 외에는 노출하지 않는다.
+ * 초성은 사실상 정답 공개라 뺐고, 박스아트는 정답 공개 시에만 보여준다.
  */
 export function buildHint(
   level: number,
@@ -79,39 +148,48 @@ export function buildHint(
   cats: Record<string, string>,
   mechs: Record<string, string>,
 ): HintData {
+  const label = HINT_LABELS[level - 1] ?? "힌트";
   switch (level) {
     case 1: {
       const players =
         g.players_min === g.players_max
           ? `${g.players_min}명`
           : `${g.players_min}-${g.players_max}명`;
-      return text(1, "인원 · 플레이타임", `${players}${playtimeSuffix(g)}`);
+      return text(1, label, `${players}${playtimeSuffix(g)}`);
     }
-    case 2: {
-      const type = g.types?.[0] ?? "";
-      const catId = commonest(g.categories, index.idf);
-      const theme = catId != null ? (cats[String(catId)] ?? "") : "";
-      // 유형과 테마 이름이 같으면("추상전략 · 추상전략") 한 번만.
-      return text(2, "타입 · 테마", [...new Set([type, theme].filter(Boolean))].join(" · "));
-    }
+    case 2:
+      return text(2, label, g.weight != null ? weightText(g.weight) : "");
     case 3:
-      return text(3, "난이도", g.weight != null ? weightBand(g.weight) : "");
+      return text(3, label, [g.types?.[0] ?? "", decade(g.year)].filter(Boolean).join(" · "));
     case 4: {
+      const catId = themeTagId(g, index, cats);
+      return text(4, label, catId != null ? (cats[String(catId)] ?? "") : "");
+    }
+    case 5: {
       const mId = commonest(g.mechanisms ?? [], index.midf);
       const mech = mId != null ? (mechs[String(mId)] ?? "") : "";
       const best = g.best_players ? `베스트 ${g.best_players}인` : "";
-      return text(4, "진행방식 · 베스트 인원", [mech, best].filter(Boolean).join(" · "));
+      return text(5, label, [mech, best].filter(Boolean).join(" · "));
     }
-    case 5:
-      return text(5, "출시연도", g.year ?? "");
-    case 6:
-      return text(6, "디자이너", (g.designers ?? []).join(", "));
+    case 6: {
+      const rate = g.rate != null ? `평점 ${g.rate.toFixed(1)}` : "";
+      return text(6, label, [rankBand(g.rank), rate].filter(Boolean).join(" · "));
+    }
     case 7: {
-      const n = [...(g.name_ko ?? "")].filter((c) => c !== " ").length;
-      return text(7, "글자 수", `${n}글자`);
+      // 태그가 적어 더 보여줄 게 없으면(예: 루미큐브 — 태그 3개) 한 칸을 버리지 않고
+      // 추천 인원·연령으로 대신한다.
+      const tag = rarestTag(g, index, cats, mechs);
+      if (tag) return text(7, label, tag);
+      const rec = g.recommended_players ? `추천 ${g.recommended_players}인` : "";
+      const age = g.age ? `${g.age}세 이상` : "";
+      return text(7, "추천 인원 · 연령", [rec, age].filter(Boolean).join(" · "));
     }
-    case 8:
-      return text(8, "초성", chosung(g.name_ko ?? ""));
+    case 8: {
+      const year = Number(g.year) > 0 ? `${g.year}년` : "";
+      const n = [...(g.name_ko ?? "")].filter((c) => c !== " ").length;
+      const parts = [knownDesigners(g).join(", "), year, n ? `${n}글자` : ""];
+      return text(8, label, parts.filter(Boolean).join(" · "));
+    }
     default:
       return text(level, "힌트", "");
   }

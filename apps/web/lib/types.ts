@@ -71,6 +71,8 @@ export interface SimilarityParts {
   theme: number;
   mech: number;
   num: number;
+  /** 난이도만 비교한 값(표시용). 2026-11 첫 배포분 응답·저장에는 없다 */
+  weight?: number;
 }
 
 export interface TodayInfo {
@@ -78,6 +80,8 @@ export interface TodayInfo {
   puzzleNumber: number;
   totalGames: number;
   poolSize: number;
+  /** 힌트 단계 이름(1단계부터). 다음 힌트 미리보기용. 구버전 서버에는 없다 */
+  hintLabels?: string[];
   /** 오늘 접속자 수. 집계 불가(구버전 서버·DO 오류)면 null/없음 */
   visitors?: number | null;
 }
