@@ -78,11 +78,13 @@ test("similarityParts: 세 축을 가중 합산하면 결합 점수와 같다", 
   assert.equal(similarityParts(idx, gloom.id, -1), null);
 });
 
-test("similarityParts.weight: 난이도가 같으면 100, 2.5 이상 차이나면 0", () => {
+test("similarityParts.weight: 웨이트가 같으면 100, 표시 눈금(1.0) 이상 차이나면 0", () => {
   const withW = games.filter((g) => g.weight != null);
   const a = withW[0];
   const same = withW.find((g) => g.id !== a.id && g.weight === a.weight)!;
-  const far = withW.find((g) => Math.abs((g.weight ?? 0) - (a.weight ?? 0)) >= 2.5)!;
+  const far = withW.find((g) => Math.abs((g.weight ?? 0) - (a.weight ?? 0)) >= 1.0)!;
+  const near = withW.find((g) => Math.abs((g.weight ?? 0) - (a.weight ?? 0)) === 0.5);
+  if (near) assert.equal(similarityParts(idx, a.id, near.id)!.weight, 50);
   assert.equal(similarityParts(idx, a.id, same.id)!.weight, 100);
   assert.equal(similarityParts(idx, a.id, far.id)!.weight, 0);
 });

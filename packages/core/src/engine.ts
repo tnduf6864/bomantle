@@ -111,6 +111,22 @@ export function weightSim(a: IndexedGame, b: IndexedGame, weightMean: number): n
   return Math.max(0, 1 - Math.abs(w1 - w2) / 2.5);
 }
 
+/**
+ * 웨이트 막대 표시 눈금: 차이가 이 값 이상이면 0. 점수 계산용 weightSim(2.5)보다 훨씬 좁다.
+ *
+ * 게임 웨이트는 대부분 1.5~3에 몰려 있어 2.5 눈금으로는 인기 게임 추측의 46%가 70 이상
+ * (빨강)이 됐다 — 테마 2%·메커니즘 0%와 비교해 신호가 아니라 소음이었다. 1.0이면 빨강은
+ * 차이 0.3 이내(약 19%), 주황은 0.65 이내다.
+ */
+export const WEIGHT_DISPLAY_RANGE = 1.0;
+
+/** 웨이트 막대용 근접도 (0~1). 표시 전용 — 결합 점수에는 쓰지 않는다. */
+export function weightCloseness(a: IndexedGame, b: IndexedGame, weightMean: number): number {
+  const w1 = a.weight ?? weightMean;
+  const w2 = b.weight ?? weightMean;
+  return Math.max(0, 1 - Math.abs(w1 - w2) / WEIGHT_DISPLAY_RANGE);
+}
+
 /** 난이도/시간/인원 기반 수치 유사도 (0~1). 사용 가능한 항목 평균. */
 export function numericSim(a: IndexedGame, b: IndexedGame, weightMean: number): number {
   const sims: number[] = [];
@@ -162,7 +178,7 @@ export function similarityParts(
     theme: toScore(tagCosine(a, b)),
     mech: toScore(mechCosine(a, b)),
     num: toScore(numericSim(a, b, idx.weightMean)),
-    weight: toScore(weightSim(a, b, idx.weightMean)),
+    weight: toScore(weightCloseness(a, b, idx.weightMean)),
   };
 }
 
