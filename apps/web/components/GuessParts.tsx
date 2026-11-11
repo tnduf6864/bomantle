@@ -11,7 +11,7 @@ import type { SimilarityParts } from "../lib/types";
 const AXES: { key: "theme" | "mech" | "weight"; label: string; title: string }[] = [
   { key: "theme", label: "테마", title: "테마·카테고리 태그가 얼마나 겹치는지" },
   { key: "mech", label: "메커니즘", title: "진행방식(메커니즘) 태그가 얼마나 겹치는지" },
-  { key: "weight", label: "웨이트", title: "난이도(웨이트)가 얼마나 비슷한지" },
+  { key: "weight", label: "웨이트", title: "웨이트(게임의 무게감)가 얼마나 비슷한지" },
 ];
 
 function tone(v: number): string {

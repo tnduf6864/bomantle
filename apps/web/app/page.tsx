@@ -123,7 +123,7 @@ function metaText(db: GameDB, g: GameMeta): string {
   const parts: string[] = [];
   const cats = categoryNames(db, g).slice(0, 3);
   if (cats.length) parts.push(cats.join("·"));
-  if (g.weight) parts.push(`난이도 ${g.weight.toFixed(1)}`);
+  if (g.weight) parts.push(`웨이트 ${g.weight.toFixed(1)}`);
   return parts.join(" · ");
 }
 
@@ -1127,7 +1127,7 @@ export default function Page() {
       <h2>보맨틀이란?</h2>
       <p>
         보맨틀은 매일 하나의 보드게임을 맞히는 무료 웹게임입니다. 정답 보드게임을
-        추측하면 카테고리·테마·난이도·인원수 등을 기준으로 계산한 유사도 점수를
+        추측하면 카테고리·테마·웨이트·인원수 등을 기준으로 계산한 유사도 점수를
         알려주고, 그 점수를 힌트 삼아 점점 정답에 가까운 보드게임을 찾아가는 방식입니다.
         영어 단어 맞히기 게임 꼬맨틀(Semantle)의 보드게임 버전이라고 보면 됩니다.
       </p>
@@ -1137,7 +1137,7 @@ export default function Page() {
         <dd>매일 한국 시간(KST) 오전 9시에 새로운 보드게임 문제로 초기화됩니다.</dd>
         <dt>점수는 어떻게 계산되나요?</dt>
         <dd>
-          보드게임의 카테고리·테마 태그와 난이도·인원·플레이타임 등 수치 정보를
+          보드게임의 카테고리·테마 태그와 웨이트·인원·플레이타임 등 수치 정보를
           결합한 유사도 엔진으로 계산합니다. 정답과 비슷한 보드게임일수록 높은
           점수와 순위를 얻습니다.
         </dd>

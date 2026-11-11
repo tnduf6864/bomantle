@@ -33,7 +33,7 @@ export function HelpModal({ total, onClose }: { total: number | null; onClose: (
             <b>메커니즘</b> — 덱빌딩·일꾼 놓기 같은 진행방식
           </li>
           <li>
-            <b>웨이트</b> — 게임의 무게감(난이도, 1~5)
+            <b>웨이트</b> — 게임의 무게감(1~5, 높을수록 어렵고 복잡함)
           </li>
         </ul>
         <p className="help-example">
